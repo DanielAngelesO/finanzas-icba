@@ -26,7 +26,7 @@ function GoogleIcon() {
 
 export function LoginPage() {
   const { state, signIn } = useAuth();
-  if (state.status === "authenticated") return <Navigate to="/diagnostico" replace />;
+  if (state.status === "authenticated") return <Navigate to="/" replace />;
   const busy = state.status === "authorizing";
   return (
     <main
@@ -42,13 +42,14 @@ export function LoginPage() {
           {/* Header */}
           <div className="text-center">
             <div
-              className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
+              className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-[0.65rem] font-extrabold tracking-[0.08em] text-emerald-300"
               style={{
-                background: "linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))",
+                background:
+                  "linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))",
                 boxShadow: "0 4px 20px rgba(52, 211, 153, 0.15)",
               }}
             >
-              💰
+              ICBA
             </div>
             <p className="text-sm font-semibold text-emerald-400">Finanzas ICBA</p>
             <h1 className="page-title mt-2">Acceso al sistema</h1>

@@ -52,10 +52,14 @@ Todos los valores `VITE_*` son visibles desde el navegador y no son secretos. Nu
 
 La hoja debe contener los encabezados definidos en `src/config/google-sheets.ts`. El orden puede variar. Son obligatorios ID, Fecha, Tipo Transacción, Cuenta, Categoría, Responsable, Método de Pago, Monto, Estado y Período. `Descripción` es opcional.
 
-## Pantallas y diagnóstico
+## Pantallas
 
-- `/diagnostico`: conexión, metadatos no sensibles, conteos de validación y problemas por fila.
-- `/diagnostico/transacciones`: primeras o últimas 10 transacciones, filtros, resumen global y JSON normalizado seguro.
+- `/`: resumen financiero del período más reciente, con selector `?period=YYYYMM`, indicadores, evolución, distribución de egresos y cinco movimientos recientes.
+- `/movimientos`: consulta de operaciones por período, tipo o ID.
+- `/control/calidad`: conteos de validación y problemas por fila.
+- `/control/fuente`: conexión y metadatos no sensibles de la fuente.
+
+Las rutas anteriores `/diagnostico` y `/diagnostico/transacciones` se redirigen automáticamente a las nuevas vistas de control y movimientos.
 
 Si aparece **Sin configurar**, revise `.env.local`. Para **403**, comparta el archivo con la cuenta Google activa. Un **404** indica ID o pestaña incorrectos. Las fechas inválidas, montos no reconocidos, encabezados faltantes e IDs duplicados se muestran sin exponer tokens.
 
@@ -65,4 +69,4 @@ Para preparar una validación, entregue un CSV/TSV anonimizado con los 15 encabe
 
 ## Límites de esta etapa
 
-No hay escritura en Sheets, dashboard final, gráficos, backend, Supabase/PostgreSQL ni administración de usuarios. La interfaz seguirá funcionando como diagnóstico aunque Google no esté configurado; la conexión real requiere las variables locales y permisos de cada usuario.
+No hay escritura en Sheets, presupuestos, conciliación bancaria, saldos contables, backend, Supabase/PostgreSQL ni administración de usuarios. La interfaz seguirá funcionando como diagnóstico aunque Google no esté configurado; la conexión real requiere las variables locales y permisos de cada usuario.

@@ -1,7 +1,7 @@
 # Pendientes para la siguiente fase
 
-- Dashboard financiero y gráficos.
 - Escritura controlada, auditoría y flujos de aprobación.
+- Presupuestos, metas, conciliación bancaria y saldos contables.
 - Backend/BFF para políticas de autorización verificables y secretos de servidor, si el alcance lo exige.
 - Adaptador Supabase o PostgreSQL manteniendo el puerto `TransactionRepository`.
 - Persistencia de configuración, usuarios y métricas operativas.

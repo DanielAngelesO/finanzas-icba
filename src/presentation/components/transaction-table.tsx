@@ -34,9 +34,7 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
               <td className="whitespace-nowrap font-mono text-xs text-slate-400">
                 {transaction.id}
               </td>
-              <td className="whitespace-nowrap">
-                {transaction.date.toLocaleDateString("es-PE")}
-              </td>
+              <td className="whitespace-nowrap">{transaction.date.toLocaleDateString("es-PE")}</td>
               <td>
                 <span className={transaction.type === "INGRESO" ? "type-ingreso" : "type-egreso"}>
                   {transaction.type === "INGRESO" ? "↑" : "↓"} {transaction.type}

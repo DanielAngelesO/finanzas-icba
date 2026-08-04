@@ -27,18 +27,31 @@
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes slide-in-left {
@@ -53,8 +66,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ───────────────────────── Base Layer ───────────────────────── */
@@ -67,7 +84,11 @@
     margin: 0;
     min-width: 20rem;
     background-color: var(--color-surface);
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     color: #e2e8f0;
@@ -78,6 +99,7 @@
     font: inherit;
   }
   button:focus-visible,
+  a:focus-visible,
   input:focus-visible,
   select:focus-visible,
   summary:focus-visible {
@@ -111,10 +133,16 @@
   padding: 1.5rem;
   background: linear-gradient(145deg, rgba(20, 28, 46, 0.8), rgba(17, 24, 39, 0.6));
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   &:hover {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 }
 
@@ -125,8 +153,12 @@
   padding: 1.5rem;
   background: linear-gradient(145deg, rgba(20, 28, 46, 0.8), rgba(17, 24, 39, 0.6));
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
   animation: fade-in-up 0.4s ease-out both;
@@ -140,7 +172,9 @@
     border-radius: 3px 0 0 3px;
   }
   &:hover {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
     transform: translateY(-2px);
   }
 }
@@ -266,7 +300,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  font-size: 1.125rem;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   background: linear-gradient(135deg, #34d399, #059669);
   box-shadow: 0 2px 12px rgba(52, 211, 153, 0.3);
 }
@@ -363,9 +399,25 @@
   z-index: 30;
   background: rgba(0, 0, 0, 0.6);
   animation: fade-in 0.2s ease-out;
+  border: none;
+  cursor: pointer;
+  padding: 0;
   @media (min-width: 1024px) {
     display: none;
   }
+}
+@utility mobile-brand-mark {
+  display: inline-flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #0a0e1a;
+  background: linear-gradient(135deg, #34d399, #059669);
 }
 
 /* ── Form fields ── */
@@ -529,7 +581,12 @@
 /* ── Loading shimmer ── */
 @utility shimmer {
   border-radius: 0.75rem;
-  background: linear-gradient(90deg, rgba(30, 41, 59, 0.3) 25%, rgba(51, 65, 85, 0.3) 50%, rgba(30, 41, 59, 0.3) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.3) 25%,
+    rgba(51, 65, 85, 0.3) 50%,
+    rgba(30, 41, 59, 0.3) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -633,5 +690,16 @@
     font-size: 0.875rem;
     font-weight: 500;
     color: #e2e8f0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -690,4 +690,3 @@ No consideres terminada la tarea si el proyecto no compila, el chequeo de tipos 
 
 Alguna inconsistencia en la solictud, o contradicciones, o falta de definiciones, preguntame.
 
-
