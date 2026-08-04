@@ -1,10 +1,11 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { AppServices } from "../../composition/services";
 import type { ConnectionStatus } from "../../domain/diagnostics";
 import {
   BalanceTrendChart,
-  ContributionChart,
+  ContributionTrendChart,
   ExpenseCategoryChart,
   FinancialTrendChart,
   IncomeCategoryChart,
@@ -23,6 +24,52 @@ const getConnectionStatus = (
   if (status) return status;
   return isError ? "ERROR" : "UNCONFIGURED";
 };
+
+function DashboardSectionHeader({
+  eyebrow,
+  title,
+  description,
+  titleId,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  titleId: string;
+}) {
+  return (
+    <div className="max-w-3xl">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400/80">
+        {eyebrow}
+      </p>
+      <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-100" id={titleId}>
+        {title}
+      </h3>
+      <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
+    </div>
+  );
+}
+
+function DashboardMetricCard({
+  label,
+  value,
+  accent,
+  animationDelay,
+  children,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+  animationDelay: string;
+  children?: ReactNode;
+}) {
+  return (
+    <article className={"stat-card " + accent} style={{ animationDelay }}>
+      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">{value}</p>
+      {children}
+    </article>
+  );
+}
 
 export function DashboardPage({ services }: { services: AppServices }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -113,37 +160,21 @@ export function DashboardPage({ services }: { services: AppServices }) {
     );
   }
 
-  const metrics = [
-    ["Ingresos", formatMoney(data.summary.income), "stat-card-emerald"],
-    ["Egresos", formatMoney(data.summary.expense), "stat-card-rose"],
-    ["Saldo del período", formatMoney(data.summary.netResult), "stat-card-indigo"],
-    [
-      "Tasa de ahorro",
-      data.summary.savingsRate === null ? "No aplica" : formatPercent(data.summary.savingsRate),
-      "stat-card-sky",
-    ],
-    ["Movimientos", data.summary.transactionCount.toLocaleString("es-PE"), "stat-card-sky"],
-  ] as const;
-
   return (
-    <div className="space-y-8 animate-fade-in-up">
-      <section className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+    <div className="space-y-9 animate-fade-in-up lg:space-y-10">
+      <header className="space-y-5 border-b border-slate-800/80 pb-7 lg:flex lg:items-end lg:justify-between lg:gap-8 lg:space-y-0">
+        <div className="max-w-xl">
           <h2 className="page-title">Resumen financiero</h2>
           <p className="page-subtitle">
-            Visión general de ingresos, egresos y movimientos registrados.
+            Lectura ejecutiva del período, su evolución anual y los movimientos registrados.
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3" aria-busy={overview.isPlaceholderData}>
-          <div className="text-sm text-slate-400">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Fecha de corte
-            </p>
-            <p className="mt-1 text-slate-300">
-              {data.dataCutoff ? formatDate(data.dataCutoff) : "Sin movimientos"}
-            </p>
-          </div>
-          <label className="field-label min-w-44">
+        <div
+          className="grid w-full gap-4 rounded-2xl border border-slate-700/70 bg-slate-900/45 p-4 sm:grid-cols-2 lg:w-auto lg:min-w-[34rem] lg:grid-cols-[minmax(12rem,1fr)_minmax(9rem,auto)_auto] lg:items-end"
+          aria-busy={overview.isPlaceholderData}
+          aria-label="Contexto del análisis"
+        >
+          <label className="field-label">
             Período
             <select
               className="field"
@@ -157,14 +188,24 @@ export function DashboardPage({ services }: { services: AppServices }) {
               ))}
             </select>
           </label>
-          <StatusBadge status={connectionStatus} />
-          {overview.isPlaceholderData ? (
-            <span className="text-xs text-slate-400" aria-live="polite">
-              Actualizando…
-            </span>
-          ) : null}
+          <div className="text-sm text-slate-400">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              Fecha de corte
+            </p>
+            <p className="mt-2 font-medium text-slate-200">
+              {data.dataCutoff ? formatDate(data.dataCutoff) : "Sin movimientos"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1 lg:justify-end">
+            <StatusBadge status={connectionStatus} />
+            {overview.isPlaceholderData ? (
+              <span className="text-xs text-slate-400" aria-live="polite">
+                Actualizando…
+              </span>
+            ) : null}
+          </div>
         </div>
-      </section>
+      </header>
 
       {data.dataQuality.invalidTransactionCount > 0 ? (
         <section className="alert-warning" role="status">
@@ -177,75 +218,111 @@ export function DashboardPage({ services }: { services: AppServices }) {
         </section>
       ) : null}
 
-      <section
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-        aria-label="Indicadores del período"
-      >
-        {metrics.map(([label, value, accent], index) => (
-          <article
-            className={"stat-card " + accent}
-            key={label}
-            style={{ animationDelay: String(index * 80) + "ms" }}
+      <section className="space-y-4" aria-labelledby="key-metrics-title">
+        <DashboardSectionHeader
+          eyebrow="Vista ejecutiva"
+          title="Indicadores clave"
+          description="Primero, los resultados del período y la posición acumulada hasta la fecha de corte."
+          titleId="key-metrics-title"
+        />
+        <div
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          aria-label="Indicadores del período"
+        >
+          <DashboardMetricCard
+            label="Ingresos"
+            value={formatMoney(data.summary.income)}
+            accent="stat-card-emerald"
+            animationDelay="0ms"
+          />
+          <DashboardMetricCard
+            label="Egresos"
+            value={formatMoney(data.summary.expense)}
+            accent="stat-card-rose"
+            animationDelay="80ms"
+          />
+          <DashboardMetricCard
+            label="Saldo del período"
+            value={formatMoney(data.summary.netResult)}
+            accent="stat-card-indigo"
+            animationDelay="160ms"
+          />
+          <DashboardMetricCard
+            label="Saldo acumulado"
+            value={formatMoney(data.accumulated.balance)}
+            accent="stat-card-emerald"
+            animationDelay="240ms"
           >
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
-            <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">{value}</p>
-          </article>
-        ))}
-        <article className="stat-card stat-card-emerald" style={{ animationDelay: "400ms" }}>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-            Saldo acumulado
-          </p>
-          <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">
-            {formatMoney(data.accumulated.balance)}
-          </p>
-          <details className="mt-3 text-xs text-slate-400">
-            <summary className="cursor-pointer font-medium text-emerald-300 hover:text-emerald-200">
-              Ver acumulados
-            </summary>
-            <dl className="mt-2 space-y-1 border-t border-slate-700/70 pt-2 tabular-nums">
-              <div className="flex justify-between gap-3">
-                <dt>Ingresos</dt>
-                <dd className="text-slate-200">{formatMoney(data.accumulated.income)}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt>Egresos</dt>
-                <dd className="text-slate-200">{formatMoney(data.accumulated.expense)}</dd>
-              </div>
-            </dl>
-          </details>
-        </article>
+            <details className="mt-3 text-xs text-slate-400">
+              <summary className="cursor-pointer font-medium text-emerald-300 hover:text-emerald-200">
+                Ver acumulados
+              </summary>
+              <dl className="mt-2 space-y-1 border-t border-slate-700/70 pt-2 tabular-nums">
+                <div className="flex justify-between gap-3">
+                  <dt>Ingresos</dt>
+                  <dd className="text-slate-200">{formatMoney(data.accumulated.income)}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Egresos</dt>
+                  <dd className="text-slate-200">{formatMoney(data.accumulated.expense)}</dd>
+                </div>
+              </dl>
+            </details>
+          </DashboardMetricCard>
+          <DashboardMetricCard
+            label="Tasa de ahorro"
+            value={
+              data.summary.savingsRate === null
+                ? "No aplica"
+                : formatPercent(data.summary.savingsRate)
+            }
+            accent="stat-card-sky"
+            animationDelay="320ms"
+          />
+          <DashboardMetricCard
+            label="Movimientos"
+            value={data.summary.transactionCount.toLocaleString("es-PE")}
+            accent="stat-card-sky"
+            animationDelay="400ms"
+          />
+        </div>
       </section>
 
-      <section className="grid gap-6 2xl:grid-cols-2" aria-label="Tendencias financieras">
-        <FinancialTrendChart trend={data.trend} />
-        <BalanceTrendChart trend={data.trend} />
+      <section className="space-y-4" aria-labelledby="financial-overview-title">
+        <DashboardSectionHeader
+          eyebrow="Evolución anual"
+          title="Panorama financiero"
+          description="Después de los indicadores, compara el flujo mensual y cómo se ha construido el saldo acumulado."
+          titleId="financial-overview-title"
+        />
+        <div className="space-y-6">
+          <FinancialTrendChart trend={data.trend} />
+          <BalanceTrendChart trend={data.trend} />
+        </div>
       </section>
 
       <section className="space-y-4" aria-labelledby="income-summary-title">
-        <div>
-          <h3 className="section-title" id="income-summary-title">
-            Resumen de ingresos
-          </h3>
-          <p className="mt-1 text-sm text-slate-400">
-            Origen y frecuencia de los aportes del período.
-          </p>
-        </div>
-        <div className="grid gap-6 xl:grid-cols-2">
+        <DashboardSectionHeader
+          eyebrow="Origen de fondos"
+          title="Análisis de ingresos"
+          description="Revisa primero la composición del período y luego el comportamiento anual de ofrendas y diezmos."
+          titleId="income-summary-title"
+        />
+        <div className="space-y-6">
           <IncomeCategoryChart categories={data.incomeCategories} />
-          <ContributionChart contributions={data.contributions} />
+          <ContributionTrendChart kind="OFRENDAS" trend={data.contributionTrends.OFRENDAS} />
+          <ContributionTrendChart kind="DIEZMOS" trend={data.contributionTrends.DIEZMOS} />
         </div>
       </section>
 
       <section className="space-y-4" aria-labelledby="expense-summary-title">
-        <div>
-          <h3 className="section-title" id="expense-summary-title">
-            Resumen ejecutivo de egresos
-          </h3>
-          <p className="mt-1 text-sm text-slate-400">
-            Separación de Salarios y Honorarios frente a los demás gastos.
-          </p>
-        </div>
-        <div className="grid gap-6 2xl:grid-cols-[minmax(19rem,0.9fr)_minmax(0,1.4fr)]">
+        <DashboardSectionHeader
+          eyebrow="Uso de fondos"
+          title="Análisis ejecutivo de egresos"
+          description="Distingue el peso de salarios y honorarios antes de profundizar en los demás rubros."
+          titleId="expense-summary-title"
+        />
+        <div className="grid gap-6 xl:grid-cols-[minmax(19rem,0.8fr)_minmax(0,1.5fr)]">
           <SalaryExpenseComparison composition={data.expenseComposition} />
           <ExpenseCategoryChart
             categories={data.expenseCategories}
@@ -254,7 +331,18 @@ export function DashboardPage({ services }: { services: AppServices }) {
         </div>
       </section>
 
-      <RecentTransactionList transactions={data.recentTransactions} movementsHref={movementsHref} />
+      <section className="space-y-4" aria-labelledby="recent-activity-title">
+        <DashboardSectionHeader
+          eyebrow="Detalle operativo"
+          title="Actividad reciente"
+          description="Cierra el resumen con las operaciones más recientes del período seleccionado."
+          titleId="recent-activity-title"
+        />
+        <RecentTransactionList
+          transactions={data.recentTransactions}
+          movementsHref={movementsHref}
+        />
+      </section>
     </div>
   );
 }

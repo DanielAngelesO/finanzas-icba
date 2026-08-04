@@ -17,7 +17,8 @@ import {
 import { Link } from "react-router-dom";
 import type {
   DashboardCategorySummary,
-  DashboardContributionSummary,
+  DashboardContributionKind,
+  DashboardContributionTrendPoint,
   DashboardExpenseComposition,
   DashboardExpenseInsights,
   DashboardTrendPoint,
@@ -53,9 +54,15 @@ function ChartEmptyState({ children }: { children: string }) {
   return <p className="empty-state mt-5">{children}</p>;
 }
 
-function CategoryList({ categories }: { categories: DashboardCategorySummary[] }) {
+function CategoryList({
+  categories,
+  className = "mt-5",
+}: {
+  categories: DashboardCategorySummary[];
+  className?: string;
+}) {
   return (
-    <ol className="mt-5 space-y-3">
+    <ol className={className + " space-y-3"}>
       {categories.map((category, index) => (
         <li className="flex items-start gap-3" key={category.category}>
           <span
@@ -78,10 +85,10 @@ export function FinancialTrendChart({ trend }: { trend: DashboardTrendPoint[] })
   return (
     <figure className="card min-w-0" aria-labelledby="financial-trend-title">
       <div>
-        <h3 className="section-title" id="financial-trend-title">
+        <h4 className="section-title" id="financial-trend-title">
           Ingresos frente a egresos
-        </h3>
-        <p className="mt-1 text-sm text-slate-400">Evolución de los últimos seis meses.</p>
+        </h4>
+        <p className="mt-1 text-sm text-slate-400">Evolución de los últimos doce meses.</p>
       </div>
       <div className="mt-5 h-72 min-w-0 sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
@@ -97,6 +104,7 @@ export function FinancialTrendChart({ trend }: { trend: DashboardTrendPoint[] })
               tickFormatter={formatChartPeriod}
               tickLine={false}
               axisLine={false}
+              minTickGap={20}
             />
             <YAxis
               tick={{ fill: "#94a3b8", fontSize: 12 }}
@@ -130,7 +138,7 @@ export function FinancialTrendChart({ trend }: { trend: DashboardTrendPoint[] })
         </ResponsiveContainer>
       </div>
       <figcaption className="sr-only">
-        Comparación de ingresos y egresos para los últimos seis meses.
+        Comparación de ingresos y egresos para los últimos doce meses.
       </figcaption>
       <table className="sr-only">
         <caption>Valores de ingresos y egresos por período</caption>
@@ -159,9 +167,9 @@ export function BalanceTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
   return (
     <figure className="card min-w-0" aria-labelledby="balance-trend-title">
       <div>
-        <h3 className="section-title" id="balance-trend-title">
+        <h4 className="section-title" id="balance-trend-title">
           Saldo acumulado y resultado mensual
-        </h3>
+        </h4>
         <p className="mt-1 text-sm text-slate-400">
           El saldo acumulado considera todo el historial hasta el corte.
         </p>
@@ -180,6 +188,7 @@ export function BalanceTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
               tickFormatter={formatChartPeriod}
               tickLine={false}
               axisLine={false}
+              minTickGap={20}
             />
             <YAxis
               tick={{ fill: "#94a3b8", fontSize: 12 }}
@@ -246,39 +255,46 @@ export function IncomeCategoryChart({ categories }: { categories: DashboardCateg
   return (
     <section className="card min-w-0" aria-labelledby="income-categories-title">
       <div>
-        <h3 className="section-title" id="income-categories-title">
+        <h4 className="section-title" id="income-categories-title">
           Ingresos por categoría
-        </h3>
+        </h4>
         <p className="mt-1 text-sm text-slate-400">Participación del ingreso del período.</p>
       </div>
       {categories.length === 0 ? (
         <ChartEmptyState>No se registraron ingresos en este período.</ChartEmptyState>
       ) : (
         <>
-          <div className="mt-4 h-64 min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart accessibilityLayer>
-                <Pie
-                  data={categories}
-                  dataKey="amount"
-                  nameKey="category"
-                  innerRadius="58%"
-                  outerRadius="82%"
-                  paddingAngle={2}
-                  isAnimationActive={false}
-                >
-                  {categories.map((category, index) => (
-                    <Cell fill={getChartColor(index)} key={category.category} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(value) => formatMoney(Number(value))}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(18rem,1.15fr)] lg:items-center">
+            <div className="h-64 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart accessibilityLayer>
+                  <Pie
+                    data={categories}
+                    dataKey="amount"
+                    nameKey="category"
+                    innerRadius="58%"
+                    outerRadius="82%"
+                    paddingAngle={2}
+                    isAnimationActive={false}
+                  >
+                    {categories.map((category, index) => (
+                      <Cell fill={getChartColor(index)} key={category.category} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value) => formatMoney(Number(value))}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="min-w-0 lg:border-l lg:border-slate-700/70 lg:pl-6">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Distribución del período
+              </p>
+              <CategoryList categories={categories} className="mt-4" />
+            </div>
           </div>
-          <CategoryList categories={categories} />
           <table className="sr-only">
             <caption>Ingresos por categoría</caption>
             <thead>
@@ -304,43 +320,82 @@ export function IncomeCategoryChart({ categories }: { categories: DashboardCateg
   );
 }
 
-export function ContributionChart({
-  contributions,
+const contributionChartDetails = {
+  OFRENDAS: {
+    title: "Comportamiento de ofrendas",
+    description: "Monto recibido y cantidad de ofrendas registradas por mes.",
+    amountColor: "#38bdf8",
+    countColor: "#34d399",
+    emptyMessage: "No se registraron ofrendas en los últimos doce meses.",
+  },
+  DIEZMOS: {
+    title: "Comportamiento de diezmos",
+    description: "Monto recibido y cantidad de diezmos registrados por mes.",
+    amountColor: "#818cf8",
+    countColor: "#fbbf24",
+    emptyMessage: "No se registraron diezmos en los últimos doce meses.",
+  },
+} satisfies Record<
+  DashboardContributionKind,
+  {
+    title: string;
+    description: string;
+    amountColor: string;
+    countColor: string;
+    emptyMessage: string;
+  }
+>;
+
+export function ContributionTrendChart({
+  kind,
+  trend,
 }: {
-  contributions: DashboardContributionSummary[];
+  kind: DashboardContributionKind;
+  trend: DashboardContributionTrendPoint[];
 }) {
-  const hasContributions = contributions.some((contribution) => contribution.transactionCount > 0);
+  const details = contributionChartDetails[kind];
+  const hasContributions = trend.some((point) => point.transactionCount > 0);
+  const titleId = "contribution-trend-" + kind.toLocaleLowerCase("es-PE") + "-title";
 
   return (
-    <section className="card min-w-0" aria-labelledby="contributions-title">
+    <figure className="card min-w-0" aria-labelledby={titleId}>
       <div>
-        <h3 className="section-title" id="contributions-title">
-          Ofrendas y diezmos
-        </h3>
-        <p className="mt-1 text-sm text-slate-400">
-          Cantidad de aportes registrados en el período.
-        </p>
+        <h4 className="section-title" id={titleId}>
+          {details.title}
+        </h4>
+        <p className="mt-1 text-sm text-slate-400">{details.description}</p>
       </div>
       {!hasContributions ? (
-        <ChartEmptyState>No se registraron ofrendas ni diezmos en este período.</ChartEmptyState>
+        <ChartEmptyState>{details.emptyMessage}</ChartEmptyState>
       ) : (
         <>
-          <div className="mt-5 h-64 min-w-0">
+          <div className="mt-5 h-72 min-w-0 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
+              <ComposedChart
                 accessibilityLayer
-                data={contributions}
+                data={trend}
                 margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               >
                 <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
                 <XAxis
-                  dataKey="kind"
+                  dataKey="period"
                   tick={{ fill: "#94a3b8", fontSize: 12 }}
-                  tickFormatter={(value) => String(value).toLocaleLowerCase("es-PE")}
+                  tickFormatter={formatChartPeriod}
                   tickLine={false}
                   axisLine={false}
+                  minTickGap={20}
                 />
                 <YAxis
+                  yAxisId="amount"
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tickFormatter={formatCompactMoney}
+                  tickLine={false}
+                  axisLine={false}
+                  width={68}
+                />
+                <YAxis
+                  yAxisId="count"
+                  orientation="right"
                   allowDecimals={false}
                   tick={{ fill: "#94a3b8", fontSize: 12 }}
                   tickLine={false}
@@ -349,61 +404,62 @@ export function ContributionChart({
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(value, name, item) => {
-                    const amount = Number(item.payload?.amount ?? 0);
-                    return [String(value) + " aportes · " + formatMoney(amount), name];
-                  }}
+                  cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+                  formatter={(value, name) =>
+                    String(name) === "Monto recibido"
+                      ? [formatMoney(Number(value)), name]
+                      : [Number(value).toLocaleString("es-PE") + " aportes", name]
+                  }
+                  labelFormatter={(label) => formatPeriod(String(label))}
                 />
+                <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "0.75rem" }} />
                 <Bar
-                  dataKey="transactionCount"
-                  name="Aportes"
-                  fill="#38bdf8"
+                  yAxisId="amount"
+                  dataKey="amount"
+                  name="Monto recibido"
+                  fill={details.amountColor}
                   radius={[5, 5, 0, 0]}
                   isAnimationActive={false}
                 />
-              </BarChart>
+                <Line
+                  yAxisId="count"
+                  type="monotone"
+                  dataKey="transactionCount"
+                  name="Número de aportes"
+                  stroke={details.countColor}
+                  strokeWidth={3}
+                  dot={{ fill: details.countColor, r: 3 }}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-            {contributions.map((contribution) => (
-              <div
-                className="rounded-xl border border-slate-700/70 bg-slate-950/20 p-3"
-                key={contribution.kind}
-              >
-                <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  {contribution.kind === "OFRENDAS" ? "Ofrendas" : "Diezmos"}
-                </dt>
-                <dd className="mt-2 text-sm font-semibold tabular-nums text-slate-100">
-                  {contribution.transactionCount.toLocaleString("es-PE")} aportes
-                </dd>
-                <dd className="mt-1 text-xs tabular-nums text-slate-400">
-                  {formatMoney(contribution.amount)}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <figcaption className="sr-only">
+            {details.description} Evolución de los últimos doce meses.
+          </figcaption>
           <table className="sr-only">
-            <caption>Ofrendas y diezmos por período</caption>
+            <caption>{details.title}</caption>
             <thead>
               <tr>
-                <th scope="col">Tipo</th>
-                <th scope="col">Aportes</th>
-                <th scope="col">Monto</th>
+                <th scope="col">Período</th>
+                <th scope="col">Monto recibido</th>
+                <th scope="col">Número de aportes</th>
               </tr>
             </thead>
             <tbody>
-              {contributions.map((contribution) => (
-                <tr key={contribution.kind}>
-                  <th scope="row">{contribution.kind}</th>
-                  <td>{contribution.transactionCount}</td>
-                  <td>{formatMoney(contribution.amount)}</td>
+              {trend.map((point) => (
+                <tr key={point.period}>
+                  <th scope="row">{formatPeriod(point.period)}</th>
+                  <td>{formatMoney(point.amount)}</td>
+                  <td>{point.transactionCount.toLocaleString("es-PE")}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </>
       )}
-    </section>
+    </figure>
   );
 }
 
@@ -424,9 +480,9 @@ export function SalaryExpenseComparison({
   return (
     <section className="card min-w-0" aria-labelledby="expense-composition-title">
       <div>
-        <h3 className="section-title" id="expense-composition-title">
+        <h4 className="section-title" id="expense-composition-title">
           Salarios frente a otros gastos
-        </h3>
+        </h4>
         <p className="mt-1 text-sm text-slate-400">Distribución de los egresos del período.</p>
       </div>
       {total === 0 ? (
@@ -547,9 +603,9 @@ export function ExpenseCategoryChart({
   return (
     <section className="card min-w-0" aria-labelledby="expense-categories-title">
       <div>
-        <h3 className="section-title" id="expense-categories-title">
+        <h4 className="section-title" id="expense-categories-title">
           Gastos no salariales por categoría
-        </h3>
+        </h4>
         <p className="mt-1 text-sm text-slate-400">
           Salarios y Honorarios se excluye de este análisis ejecutivo.
         </p>
@@ -660,9 +716,9 @@ export function RecentTransactionList({
     <section className="card min-w-0" aria-labelledby="recent-transactions-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="section-title" id="recent-transactions-title">
+          <h4 className="section-title" id="recent-transactions-title">
             Movimientos recientes
-          </h3>
+          </h4>
           <p className="mt-1 text-sm text-slate-400">
             Operaciones registradas en el período seleccionado.
           </p>

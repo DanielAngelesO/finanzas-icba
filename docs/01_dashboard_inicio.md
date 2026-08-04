@@ -15,6 +15,13 @@ Otro grafico para identificar el numero de ofrendas y diezmos durante el periodo
 
 Y una secciòn para egresos (sugerir que debe ir un modelo ejecutivo)
 
+Mejora 1:
+Extiende estos graficos a un horizonte de un año:
+**Ingresos frente a egresos**
+**Saldo acumulado y resultado mensual**
 
+En la seccion de Ingresos, el grafico **Ofrendas y diezmos, reemplazalo por un grafico que se vea el coomportamiento de diezmo y de ofrenta en el horizonte de un año.**
+
+Estos graficos que vayan en una sola linea entera para mejor visualizacion.
 
 ⬇

@@ -63,10 +63,24 @@ describe("GetDashboardOverviewUseCase", () => {
     expect(overview.incomeCategories).toEqual([
       { category: "Ofrendas", amount: 1_200, transactionCount: 1, share: 1 },
     ]);
-    expect(overview.contributions).toEqual([
-      { kind: "OFRENDAS", amount: 1_200, transactionCount: 1 },
-      { kind: "DIEZMOS", amount: 0, transactionCount: 0 },
-    ]);
+    expect(overview.contributionTrends.OFRENDAS).toHaveLength(12);
+    expect(overview.contributionTrends.OFRENDAS.find((point) => point.period === "202608")).toEqual(
+      {
+        period: "202608",
+        amount: 1_200,
+        transactionCount: 1,
+      },
+    );
+    expect(overview.contributionTrends.DIEZMOS.find((point) => point.period === "202607")).toEqual({
+      period: "202607",
+      amount: 900,
+      transactionCount: 1,
+    });
+    expect(overview.contributionTrends.DIEZMOS.find((point) => point.period === "202608")).toEqual({
+      period: "202608",
+      amount: 0,
+      transactionCount: 0,
+    });
     expect(overview.recentTransactions.map((transaction) => transaction.id)).toEqual([
       "EGR-02",
       "EGR-01",
@@ -79,8 +93,17 @@ describe("GetDashboardOverviewUseCase", () => {
     });
   });
 
-  it("genera seis meses calendario y calcula cada saldo acumulado con el historial anterior", async () => {
-    const periods = ["202608", "202607", "202606", "202605", "202604", "202603", "202602"];
+  it("genera doce meses calendario y calcula cada saldo acumulado con el historial anterior", async () => {
+    const periods = [
+      "202608",
+      "202607",
+      "202606",
+      "202605",
+      "202604",
+      "202603",
+      "202602",
+      "202506",
+    ];
     const repository = new InMemoryTransactionRepository(
       periods.map((period) =>
         transactionForPeriod("ING-" + period, period, "INGRESO", 100, "Ofrendas"),
@@ -90,6 +113,12 @@ describe("GetDashboardOverviewUseCase", () => {
     const overview = await new GetDashboardOverviewUseCase(repository).execute("202606");
 
     expect(overview.trend.map((summary) => summary.period)).toEqual([
+      "202507",
+      "202508",
+      "202509",
+      "202510",
+      "202511",
+      "202512",
       "202601",
       "202602",
       "202603",
@@ -98,7 +127,7 @@ describe("GetDashboardOverviewUseCase", () => {
       "202606",
     ]);
     expect(overview.trend.map((summary) => summary.cumulativeBalance)).toEqual([
-      0, 100, 200, 300, 400, 500,
+      100, 100, 100, 100, 100, 100, 100, 200, 300, 400, 500, 600,
     ]);
     expect(overview.availablePeriods).toEqual(periods);
   });
@@ -178,10 +207,25 @@ describe("GetDashboardOverviewUseCase", () => {
       "Salarios y Honorarios Extra",
     ]);
     expect(overview.expenseInsights?.topThreeShare).toBe(1);
-    expect(overview.contributions).toEqual([
-      { kind: "OFRENDAS", amount: 600, transactionCount: 1 },
-      { kind: "DIEZMOS", amount: 1_000, transactionCount: 1 },
-    ]);
+    expect(overview.contributionTrends.OFRENDAS.find((point) => point.period === "202607")).toEqual(
+      {
+        period: "202607",
+        amount: 300,
+        transactionCount: 1,
+      },
+    );
+    expect(overview.contributionTrends.OFRENDAS.find((point) => point.period === "202608")).toEqual(
+      {
+        period: "202608",
+        amount: 600,
+        transactionCount: 1,
+      },
+    );
+    expect(overview.contributionTrends.DIEZMOS.find((point) => point.period === "202608")).toEqual({
+      period: "202608",
+      amount: 1_000,
+      transactionCount: 1,
+    });
   });
 
   it("marca la tasa de ahorro como no aplicable cuando el período no tiene ingresos", async () => {
@@ -208,6 +252,7 @@ describe("GetDashboardOverviewUseCase", () => {
     expect(overview.summary).toBeNull();
     expect(overview.accumulated).toBeNull();
     expect(overview.trend).toEqual([]);
+    expect(overview.contributionTrends).toEqual({ OFRENDAS: [], DIEZMOS: [] });
     expect(overview.expenseComposition).toBeNull();
     expect(overview.dataCutoff).toBeNull();
     expect(overview.dataQuality.invalidTransactionCount).toBe(1);

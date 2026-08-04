@@ -26,11 +26,18 @@ export interface DashboardCategorySummary {
   share: number;
 }
 
-export interface DashboardContributionSummary {
-  kind: "OFRENDAS" | "DIEZMOS";
+export type DashboardContributionKind = "OFRENDAS" | "DIEZMOS";
+
+export interface DashboardContributionTrendPoint {
+  period: string;
   amount: number;
   transactionCount: number;
 }
+
+export type DashboardContributionTrends = Record<
+  DashboardContributionKind,
+  DashboardContributionTrendPoint[]
+>;
 
 export interface DashboardExpenseGroup {
   amount: number;
@@ -61,7 +68,7 @@ export interface DashboardOverview {
   accumulated: DashboardAccumulatedSummary | null;
   trend: DashboardTrendPoint[];
   incomeCategories: DashboardCategorySummary[];
-  contributions: DashboardContributionSummary[];
+  contributionTrends: DashboardContributionTrends;
   expenseComposition: DashboardExpenseComposition | null;
   expenseCategories: DashboardCategorySummary[];
   expenseInsights: DashboardExpenseInsights | null;

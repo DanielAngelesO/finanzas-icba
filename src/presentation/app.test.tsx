@@ -156,6 +156,26 @@ describe("navegación principal", () => {
     expect(within(accumulatedDetail).getByText("Egresos")).toBeInTheDocument();
   });
 
+  it("muestra las tendencias anuales accesibles de ofrendas y diezmos", async () => {
+    renderApp("/");
+
+    expect(
+      await screen.findByRole("heading", { name: "Comportamiento de ofrendas" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Comportamiento de diezmos" })).toBeInTheDocument();
+
+    const offeringsTable = screen.getByRole("table", { name: "Comportamiento de ofrendas" });
+    const tithesTable = screen.getByRole("table", { name: "Comportamiento de diezmos" });
+    expect(
+      within(offeringsTable).getByRole("columnheader", { name: "Monto recibido" }),
+    ).toBeInTheDocument();
+    expect(
+      within(offeringsTable).getByRole("columnheader", { name: "Número de aportes" }),
+    ).toBeInTheDocument();
+    expect(within(offeringsTable).getAllByRole("row")).toHaveLength(13);
+    expect(within(tithesTable).getAllByRole("row")).toHaveLength(13);
+  });
+
   it("marca el destino activo y cierra el menú móvil al navegar", async () => {
     const user = userEvent.setup();
     renderApp("/movimientos");

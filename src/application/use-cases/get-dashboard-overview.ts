@@ -1,7 +1,9 @@
 import type {
   DashboardAccumulatedSummary,
   DashboardCategorySummary,
-  DashboardContributionSummary,
+  DashboardContributionKind,
+  DashboardContributionTrendPoint,
+  DashboardContributionTrends,
   DashboardExpenseComposition,
   DashboardExpenseInsights,
   DashboardExpenseGroup,
@@ -13,7 +15,7 @@ import type { Transaction } from "../../domain/transaction";
 import type { TransactionRepository } from "../ports/transaction-repository";
 
 const dashboardPeriodPattern = /^\d{6}$/;
-const maximumTrendPeriods = 6;
+const maximumTrendPeriods = 12;
 const maximumCategories = 5;
 const maximumRecentTransactions = 5;
 const salaryAndFeesCategory = "salarios y honorarios";
@@ -35,9 +37,7 @@ const normalizeCategory = (value: string): string =>
     .trim()
     .toLocaleLowerCase("es-PE");
 
-const getContributionKind = (
-  transaction: Transaction,
-): DashboardContributionSummary["kind"] | null => {
+const getContributionKind = (transaction: Transaction): DashboardContributionKind | null => {
   if (transaction.type !== "INGRESO") return null;
   const values = [transaction.category, transaction.subcategory].filter(
     (value): value is string => value !== null,
@@ -150,17 +150,29 @@ const groupMainCategories = (
   ];
 };
 
-const getContributionSummaries = (transactions: Transaction[]): DashboardContributionSummary[] =>
-  (["OFRENDAS", "DIEZMOS"] as const).map((kind) => {
-    const matchingTransactions = transactions.filter(
+const getContributionTrend = (
+  kind: DashboardContributionKind,
+  periods: string[],
+  transactionsByPeriod: Map<string, Transaction[]>,
+): DashboardContributionTrendPoint[] =>
+  periods.map((period) => {
+    const matchingTransactions = (transactionsByPeriod.get(period) ?? []).filter(
       (transaction) => getContributionKind(transaction) === kind,
     );
     return {
-      kind,
+      period,
       amount: matchingTransactions.reduce((amount, transaction) => amount + transaction.amount, 0),
       transactionCount: matchingTransactions.length,
     };
   });
+
+const getContributionTrends = (
+  periods: string[],
+  transactionsByPeriod: Map<string, Transaction[]>,
+): DashboardContributionTrends => ({
+  OFRENDAS: getContributionTrend("OFRENDAS", periods, transactionsByPeriod),
+  DIEZMOS: getContributionTrend("DIEZMOS", periods, transactionsByPeriod),
+});
 
 const createExpenseGroup = (
   transactions: Transaction[],
@@ -250,7 +262,7 @@ export class GetDashboardOverviewUseCase {
         accumulated: null,
         trend: [],
         incomeCategories: [],
-        contributions: [],
+        contributionTrends: { OFRENDAS: [], DIEZMOS: [] },
         expenseComposition: null,
         expenseCategories: [],
         expenseInsights: null,
@@ -313,7 +325,7 @@ export class GetDashboardOverviewUseCase {
       accumulated,
       trend,
       incomeCategories: groupMainCategories(getCategorySummaries(selectedTransactions, "INGRESO")),
-      contributions: getContributionSummaries(selectedTransactions),
+      contributionTrends: getContributionTrends(trendPeriods, transactionsByPeriod),
       expenseComposition: getExpenseComposition(selectedTransactions),
       expenseCategories: groupMainCategories(allNonSalaryExpenseCategories),
       expenseInsights: getExpenseInsights(allNonSalaryExpenseCategories),
