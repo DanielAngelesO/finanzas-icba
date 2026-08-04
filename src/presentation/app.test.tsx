@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DataSourceQueries } from "../application/use-cases/data-source-queries";
 import { GetBasicFinancialSummaryUseCase } from "../application/use-cases/get-basic-financial-summary";
 import { GetDashboardOverviewUseCase } from "../application/use-cases/get-dashboard-overview";
+import { GetExpenseAnalysisUseCase } from "../application/use-cases/get-expense-analysis";
 import { TransactionQueries } from "../application/use-cases/transaction-queries";
 import { AccessTokenStore, type AppServices } from "../composition/services";
 import type { DashboardOverview } from "../domain/dashboard";
@@ -53,6 +54,7 @@ const createServices = (
     dataSource: new DataSourceQueries(repository),
     financialSummary: new GetBasicFinancialSummaryUseCase(repository),
     dashboard: new GetDashboardOverviewUseCase(repository),
+    expenses: new GetExpenseAnalysisUseCase(repository),
   };
 };
 
@@ -198,6 +200,19 @@ describe("navegación principal", () => {
       "false",
     );
     expect(await screen.findByRole("heading", { name: "Calidad de datos" })).toBeInTheDocument();
+  });
+
+  it("expone el módulo de gastos desde la navegación principal", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+    const expensesLink = await screen.findByRole("link", { name: "Gastos" });
+    expect(expensesLink).toHaveAttribute("href", "/gastos");
+
+    await user.click(expensesLink);
+
+    expect(await screen.findByRole("heading", { name: "Análisis de gastos" })).toBeInTheDocument();
   });
 
   it("ofrece recuperación cuando no se puede cargar el resumen", async () => {

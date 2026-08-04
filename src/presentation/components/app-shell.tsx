@@ -22,6 +22,15 @@ function ReceiptIcon() {
   );
 }
 
+function ChartIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M3.25 17.5A.75.75 0 0 1 2.5 16.75v-13a.75.75 0 0 1 1.5 0v13c0 .414-.336.75-.75.75Z" />
+      <path d="M5.5 16.75a.75.75 0 0 1-.75-.75V9.5a.75.75 0 0 1 1.5 0V16c0 .414-.336.75-.75.75Zm4.5 0a.75.75 0 0 1-.75-.75V6.25a.75.75 0 0 1 1.5 0V16c0 .414-.336.75-.75.75Zm4.5 0a.75.75 0 0 1-.75-.75v-4.25a.75.75 0 0 1 1.5 0V16c0 .414-.336.75-.75.75Zm3.25.75H2.5a.75.75 0 0 1 0-1.5h15.25a.75.75 0 0 1 0 1.5Z" />
+    </svg>
+  );
+}
+
 function CheckIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -160,6 +169,12 @@ export function AppShell() {
         <NavLink className="sidebar-link" to="/movimientos" onClick={closeSidebar}>
           <ReceiptIcon />
           Movimientos
+        </NavLink>
+
+        <p className="sidebar-section-label">Análisis</p>
+        <NavLink className="sidebar-link" to="/gastos" onClick={closeSidebar}>
+          <ChartIcon />
+          Gastos
         </NavLink>
 
         <p className="sidebar-section-label">Control de datos</p>

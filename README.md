@@ -55,11 +55,18 @@ La hoja debe contener los encabezados definidos en `src/config/google-sheets.ts`
 ## Pantallas
 
 - `/`: resumen financiero del período más reciente, con selector `?period=YYYYMM`, seis indicadores, acumulados desplegables, tendencias de doce meses, composición de ingresos y evolución mensual de montos y cantidades de ofrendas/diezmos. Los egresos separan `Salarios y Honorarios` de las demás categorías; el ranking detallado excluye esa categoría.
+- `/gastos`: análisis de egresos por rango móvil, cuenta, categoría, subcategoría, proveedor, responsable, método y estado. Incluye comparación con el período anterior equivalente, trazabilidad de comprobantes, concentración, señales conservadoras para revisión y detalle paginado. No sustituye un presupuesto, una conciliación ni una auditoría.
 - `/movimientos`: consulta de operaciones por período, tipo o ID.
 - `/control/calidad`: conteos de validación y problemas por fila.
 - `/control/fuente`: conexión y metadatos no sensibles de la fuente.
 
 Las rutas anteriores `/diagnostico` y `/diagnostico/transacciones` se redirigen automáticamente a las nuevas vistas de control y movimientos.
+
+### Método de análisis de gastos
+
+`/gastos` parte de los últimos doce meses disponibles, salvo que la URL indique `from=YYYYMM` y `to=YYYYMM`. La comparación histórica cubre el intervalo inmediatamente anterior de la misma duración y conserva los mismos filtros analíticos. El promedio mensual incluye meses sin egresos; la cobertura documental es el monto con `Referencia / Comprobante` registrado entre el gasto total; y la concentración del proveedor principal se calcula sobre todo el gasto del rango.
+
+Las señales de revisión se limitan a referencias ausentes, pagos registrados como `Efectivo` o `Cash`, y referencias repetidas después de normalizar mayúsculas, espacios y diacríticos. Son ayudas de revisión operativa, no evidencias de fraude ni validaciones tributarias.
 
 Si aparece **Sin configurar**, revise `.env.local`. Para **403**, comparta el archivo con la cuenta Google activa. Un **404** indica ID o pestaña incorrectos. Las fechas inválidas, montos no reconocidos, encabezados faltantes e IDs duplicados se muestran sin exponer tokens.
 
@@ -69,4 +76,4 @@ Para preparar una validación, entregue un CSV/TSV anonimizado con los 15 encabe
 
 ## Límites de esta etapa
 
-No hay escritura en Sheets, presupuestos, conciliación bancaria, saldos contables, backend, Supabase/PostgreSQL ni administración de usuarios. La interfaz seguirá funcionando como diagnóstico aunque Google no esté configurado; la conexión real requiere las variables locales y permisos de cada usuario.
+No hay escritura en Sheets, presupuestos, conciliación bancaria, saldos contables, backend, Supabase/PostgreSQL ni administración de usuarios. La cobertura documental de `/gastos` verifica que existe una referencia registrada, no la validez del comprobante. La interfaz seguirá funcionando como diagnóstico aunque Google no esté configurado; la conexión real requiere las variables locales y permisos de cada usuario.

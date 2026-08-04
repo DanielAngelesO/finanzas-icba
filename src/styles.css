@@ -865,6 +865,39 @@
   }
 }
 
+/* ── Expense analysis ── */
+@utility expense-breakdown-action {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  padding: 0.25rem 0.375rem;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+  &:hover {
+    border-color: rgba(52, 211, 153, 0.25);
+    background: rgba(6, 95, 70, 0.13);
+  }
+}
+@utility expense-signal {
+  min-width: 0;
+  border: 1px solid rgba(120, 53, 15, 0.42);
+  border-radius: 0.875rem;
+  padding: 1rem;
+  background: rgba(120, 53, 15, 0.08);
+  &[data-selected] {
+    border-color: rgba(251, 191, 36, 0.74);
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.12);
+  }
+}
+
 /* ── Google button ── */
 @utility button-google {
   display: inline-flex;

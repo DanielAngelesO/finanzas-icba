@@ -134,6 +134,9 @@ export function DashboardPage({ services }: { services: AppServices }) {
   const movementsHref = data.selectedPeriod
     ? "/movimientos?period=" + data.selectedPeriod
     : "/movimientos";
+  const expensesHref = data.selectedPeriod
+    ? "/gastos?from=" + data.selectedPeriod + "&to=" + data.selectedPeriod
+    : "/gastos";
 
   if (!data.summary || !data.accumulated || !data.expenseComposition || !data.expenseInsights) {
     return (
@@ -316,12 +319,17 @@ export function DashboardPage({ services }: { services: AppServices }) {
       </section>
 
       <section className="space-y-4" aria-labelledby="expense-summary-title">
-        <DashboardSectionHeader
-          eyebrow="Uso de fondos"
-          title="Análisis ejecutivo de egresos"
-          description="Distingue el peso de salarios y honorarios antes de profundizar en los demás rubros."
-          titleId="expense-summary-title"
-        />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <DashboardSectionHeader
+            eyebrow="Uso de fondos"
+            title="Análisis ejecutivo de egresos"
+            description="Distingue el peso de salarios y honorarios antes de profundizar en los demás rubros."
+            titleId="expense-summary-title"
+          />
+          <Link className="button-secondary text-xs" to={expensesHref}>
+            Profundizar en gastos
+          </Link>
+        </div>
         <div className="grid gap-6 xl:grid-cols-[minmax(19rem,0.8fr)_minmax(0,1.5fr)]">
           <SalaryExpenseComparison composition={data.expenseComposition} />
           <ExpenseCategoryChart
