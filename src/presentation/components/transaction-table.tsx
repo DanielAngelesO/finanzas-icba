@@ -7,9 +7,9 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
   if (transactions.length === 0)
     return <p className="empty-state">No hay transacciones que mostrar.</p>;
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-800">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-900 text-xs uppercase tracking-wide text-slate-400">
+    <div className="data-table-wrapper animate-fade-in">
+      <table className="data-table">
+        <thead>
           <tr>
             {[
               "ID",
@@ -22,28 +22,36 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
               "Estado",
               "Período",
             ].map((heading) => (
-              <th className="whitespace-nowrap px-3 py-3 font-medium" scope="col" key={heading}>
+              <th scope="col" key={heading}>
                 {heading}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800">
+        <tbody>
           {transactions.map((transaction) => (
-            <tr className="bg-slate-950/40" key={transaction.id}>
-              <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">{transaction.id}</td>
-              <td className="whitespace-nowrap px-3 py-3">
+            <tr key={transaction.id}>
+              <td className="whitespace-nowrap font-mono text-xs text-slate-400">
+                {transaction.id}
+              </td>
+              <td className="whitespace-nowrap">
                 {transaction.date.toLocaleDateString("es-PE")}
               </td>
-              <td className="px-3 py-3">{transaction.type}</td>
-              <td className="px-3 py-3">{transaction.account}</td>
-              <td className="px-3 py-3">{transaction.category}</td>
-              <td className="min-w-48 px-3 py-3">{transaction.description ?? "—"}</td>
-              <td className="whitespace-nowrap px-3 py-3 tabular-nums">
+              <td>
+                <span className={transaction.type === "INGRESO" ? "type-ingreso" : "type-egreso"}>
+                  {transaction.type === "INGRESO" ? "↑" : "↓"} {transaction.type}
+                </span>
+              </td>
+              <td>{transaction.account}</td>
+              <td>{transaction.category}</td>
+              <td className="min-w-48">{transaction.description ?? "—"}</td>
+              <td
+                className={`whitespace-nowrap tabular-nums font-medium ${transaction.type === "INGRESO" ? "amount-positive" : "amount-negative"}`}
+              >
                 {formatMoney(transaction.amount)}
               </td>
-              <td className="px-3 py-3">{transaction.status}</td>
-              <td className="px-3 py-3">{transaction.period}</td>
+              <td>{transaction.status}</td>
+              <td className="text-slate-400">{transaction.period}</td>
             </tr>
           ))}
         </tbody>

@@ -43,37 +43,51 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in-up">
+      {/* Page header */}
       <section>
-        <h2 className="text-2xl font-bold">Prueba de transacciones</h2>
-        <p className="mt-1 text-slate-400">
+        <h2 className="page-title">Prueba de transacciones</h2>
+        <p className="page-subtitle">
           Lectura normalizada y temporal para validar la integración.
         </p>
       </section>
+
+      {/* Summary cards */}
       {summary.data ? (
         <section
           className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
           aria-label="Resumen financiero global"
         >
-          {[
-            ["Ingresos", currency.format(summary.data.income)],
-            ["Egresos", currency.format(summary.data.expense)],
-            ["Balance", currency.format(summary.data.balance)],
+          {(
             [
-              "Filas válidas / inválidas",
-              `${summary.data.validTransactionCount} / ${summary.data.invalidTransactionCount}`,
-            ],
-          ].map(([label, value]) => (
-            <article className="card" key={label}>
-              <p className="text-sm text-slate-400">{label}</p>
-              <p className="mt-2 text-xl font-bold tabular-nums">{value}</p>
+              ["Ingresos", currency.format(summary.data.income), "stat-card-emerald"],
+              ["Egresos", currency.format(summary.data.expense), "stat-card-rose"],
+              ["Balance", currency.format(summary.data.balance), "stat-card-indigo"],
+              [
+                "Filas válidas / inválidas",
+                `${summary.data.validTransactionCount} / ${summary.data.invalidTransactionCount}`,
+                "stat-card-sky",
+              ],
+            ] as const
+          ).map(([label, value, accent], index) => (
+            <article
+              className={`stat-card ${accent}`}
+              key={label}
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                {label}
+              </p>
+              <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">{value}</p>
             </article>
           ))}
         </section>
       ) : null}
+
+      {/* Filters */}
       <section className="card">
         <h3 className="section-title">Consulta</h3>
-        <div className="mt-4 grid gap-4 md:grid-cols-4">
+        <div className="mt-5 grid gap-5 md:grid-cols-4">
           <label className="field-label">
             Período
             <select
@@ -110,16 +124,16 @@ export function TransactionsPage({ services }: { services: AppServices }) {
           </label>
           <fieldset className="field-label">
             Vista
-            <div className="mt-2 flex gap-2">
+            <div className="segmented-control mt-1">
               <button
-                className={view === "first" ? "button-primary" : "button-secondary"}
+                className={`segmented-btn ${view === "first" ? "segmented-btn-active" : ""}`}
                 type="button"
                 onClick={() => setView("first")}
               >
                 Primeras 10
               </button>
               <button
-                className={view === "recent" ? "button-primary" : "button-secondary"}
+                className={`segmented-btn ${view === "recent" ? "segmented-btn-active" : ""}`}
                 type="button"
                 onClick={() => setView("recent")}
               >
@@ -129,24 +143,31 @@ export function TransactionsPage({ services }: { services: AppServices }) {
           </fieldset>
         </div>
       </section>
+
+      {/* Transactions table */}
       <section>
-        <h3 className="section-title mb-3">Transacciones normalizadas</h3>
+        <h3 className="section-title mb-4">Transacciones normalizadas</h3>
         {transactions.isPending ? (
-          <p className="empty-state" role="status">
-            Cargando transacciones…
-          </p>
+          <div className="space-y-3">
+            <div className="shimmer h-12 w-full" />
+            <div className="shimmer h-10 w-full" />
+            <div className="shimmer h-10 w-full" />
+            <div className="shimmer h-10 w-full" />
+          </div>
         ) : null}
         {transactions.isError ? (
           <p className="alert-error">No se pudieron cargar las transacciones.</p>
         ) : null}
         {transactions.data ? <TransactionTable transactions={transactions.data} /> : null}
       </section>
+
+      {/* Raw inspection */}
       {inspection.data ? (
-        <details className="card">
-          <summary className="cursor-pointer font-semibold">
-            Ver respuesta normalizada segura
+        <details className="card group">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-300 transition-colors hover:text-slate-100">
+            <span className="ml-1">Ver respuesta normalizada segura</span>
           </summary>
-          <pre className="mt-4 max-h-96 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-300">
+          <pre className="mt-4 max-h-96 overflow-auto rounded-xl p-4 text-xs text-slate-400" style={{ background: "rgba(10, 14, 26, 0.6)" }}>
             {JSON.stringify(inspection.data, null, 2)}
           </pre>
         </details>
