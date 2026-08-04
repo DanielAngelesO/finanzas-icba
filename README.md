@@ -30,7 +30,7 @@ npm run build
 1. Cree o seleccione un proyecto en Google Cloud y habilite **Google Sheets API**.
 2. Configure la pantalla de consentimiento OAuth. Si la app es externa y sigue en pruebas, añada los correos de los usuarios como test users.
 3. Cree un OAuth 2.0 Client ID de tipo **Web application**.
-4. Añada `http://localhost:5173` como origen JavaScript autorizado; agregue el origen final al desplegar.
+4. Para desarrollo en el equipo anfitrión, añada `http://localhost:5173` como origen JavaScript autorizado. Google no acepta direcciones IP privadas como origen OAuth; para iniciar sesión desde otros dispositivos se necesita un dominio público que controle, servido por HTTPS, y registrar ese origen en Google Cloud. La URL LAN que muestre Vite sirve para probar la interfaz sin OAuth.
 5. Copie únicamente el Client ID a `VITE_GOOGLE_CLIENT_ID`. No se usa ni se debe crear un client secret para esta SPA.
 6. Comparta el Sheet con cada usuario autorizado como Viewer. Ese permiso es la barrera de acceso real; la allowlist de la aplicación solo evita intentos innecesarios.
 

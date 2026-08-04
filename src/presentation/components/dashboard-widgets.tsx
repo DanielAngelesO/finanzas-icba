@@ -33,16 +33,23 @@ import {
   formatShortPeriod,
 } from "../formatters";
 
-const chartPalette = ["#34d399", "#818cf8", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa"];
+const chartPalette = [
+  "var(--ui-chart-1)",
+  "var(--ui-chart-2)",
+  "var(--ui-chart-3)",
+  "var(--ui-chart-4)",
+  "var(--ui-chart-5)",
+  "var(--ui-chart-6)",
+];
 
 const getChartColor = (index: number): string =>
-  chartPalette[index % chartPalette.length] ?? "#34d399";
+  chartPalette[index % chartPalette.length] ?? "var(--ui-chart-1)";
 
 const tooltipStyle = {
-  border: "1px solid #293548",
+  border: "1px solid var(--ui-border)",
   borderRadius: "0.75rem",
-  background: "#111827",
-  color: "#e2e8f0",
+  background: "var(--ui-surface)",
+  color: "var(--ui-text)",
 };
 
 const formatChartPeriod = (value: string): string => formatShortPeriod(value).replace(".", "");
@@ -97,17 +104,17 @@ export function FinancialTrendChart({ trend }: { trend: DashboardTrendPoint[] })
             data={trend}
             margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
           >
-            <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid stroke="var(--ui-chart-grid)" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="period"
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
               tickFormatter={formatChartPeriod}
               tickLine={false}
               axisLine={false}
               minTickGap={20}
             />
             <YAxis
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
               tickFormatter={formatCompactMoney}
               tickLine={false}
               axisLine={false}
@@ -115,22 +122,22 @@ export function FinancialTrendChart({ trend }: { trend: DashboardTrendPoint[] })
             />
             <Tooltip
               contentStyle={tooltipStyle}
-              cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+              cursor={{ fill: "var(--ui-chart-cursor)" }}
               formatter={(value) => formatMoney(Number(value))}
               labelFormatter={(label) => formatPeriod(String(label))}
             />
-            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "0.75rem" }} />
+            <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
             <Bar
               dataKey="income"
               name="Ingresos"
-              fill="#34d399"
+              fill="var(--ui-chart-1)"
               radius={[5, 5, 0, 0]}
               isAnimationActive={false}
             />
             <Bar
               dataKey="expense"
               name="Egresos"
-              fill="#fb7185"
+              fill="var(--ui-danger)"
               radius={[5, 5, 0, 0]}
               isAnimationActive={false}
             />
@@ -181,17 +188,17 @@ export function BalanceTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
             data={trend}
             margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
           >
-            <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid stroke="var(--ui-chart-grid)" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="period"
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
               tickFormatter={formatChartPeriod}
               tickLine={false}
               axisLine={false}
               minTickGap={20}
             />
             <YAxis
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
               tickFormatter={formatCompactMoney}
               tickLine={false}
               axisLine={false}
@@ -199,16 +206,16 @@ export function BalanceTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
             />
             <Tooltip
               contentStyle={tooltipStyle}
-              cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+              cursor={{ fill: "var(--ui-chart-cursor)" }}
               formatter={(value) => formatMoney(Number(value))}
               labelFormatter={(label) => formatPeriod(String(label))}
             />
-            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "0.75rem" }} />
-            <ReferenceLine y={0} stroke="#64748b" strokeDasharray="4 4" />
+            <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
+            <ReferenceLine y={0} stroke="var(--ui-text-faint)" strokeDasharray="4 4" />
             <Bar
               dataKey="netResult"
               name="Saldo neto mensual"
-              fill="#818cf8"
+              fill="var(--ui-chart-2)"
               radius={[5, 5, 0, 0]}
               isAnimationActive={false}
             />
@@ -216,9 +223,9 @@ export function BalanceTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
               type="monotone"
               dataKey="cumulativeBalance"
               name="Saldo acumulado"
-              stroke="#34d399"
+              stroke="var(--ui-chart-1)"
               strokeWidth={3}
-              dot={{ fill: "#34d399", r: 3 }}
+              dot={{ fill: "var(--ui-chart-1)", r: 3 }}
               activeDot={{ r: 5 }}
               isAnimationActive={false}
             />
@@ -324,15 +331,15 @@ const contributionChartDetails = {
   OFRENDAS: {
     title: "Comportamiento de ofrendas",
     description: "Monto recibido y cantidad de ofrendas registradas por mes.",
-    amountColor: "#38bdf8",
-    countColor: "#34d399",
+    amountColor: "var(--ui-chart-3)",
+    countColor: "var(--ui-chart-1)",
     emptyMessage: "No se registraron ofrendas en los últimos doce meses.",
   },
   DIEZMOS: {
     title: "Comportamiento de diezmos",
     description: "Monto recibido y cantidad de diezmos registrados por mes.",
-    amountColor: "#818cf8",
-    countColor: "#fbbf24",
+    amountColor: "var(--ui-chart-2)",
+    countColor: "var(--ui-chart-4)",
     emptyMessage: "No se registraron diezmos en los últimos doce meses.",
   },
 } satisfies Record<
@@ -376,10 +383,14 @@ export function ContributionTrendChart({
                 data={trend}
                 margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               >
-                <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="period"
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickFormatter={formatChartPeriod}
                   tickLine={false}
                   axisLine={false}
@@ -387,7 +398,7 @@ export function ContributionTrendChart({
                 />
                 <YAxis
                   yAxisId="amount"
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickFormatter={formatCompactMoney}
                   tickLine={false}
                   axisLine={false}
@@ -397,14 +408,14 @@ export function ContributionTrendChart({
                   yAxisId="count"
                   orientation="right"
                   allowDecimals={false}
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   width={34}
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+                  cursor={{ fill: "var(--ui-chart-cursor)" }}
                   formatter={(value, name) =>
                     String(name) === "Monto recibido"
                       ? [formatMoney(Number(value)), name]
@@ -412,7 +423,7 @@ export function ContributionTrendChart({
                   }
                   labelFormatter={(label) => formatPeriod(String(label))}
                 />
-                <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "0.75rem" }} />
+                <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
                 <Bar
                   yAxisId="amount"
                   dataKey="amount"
@@ -507,14 +518,14 @@ export function SalaryExpenseComparison({
                   dataKey="salariesAndFees"
                   name="Salarios y Honorarios"
                   stackId="expenses"
-                  fill="#fbbf24"
+                  fill="var(--ui-chart-4)"
                   isAnimationActive={false}
                 />
                 <Bar
                   dataKey="otherExpenses"
                   name="Demás categorías"
                   stackId="expenses"
-                  fill="#818cf8"
+                  fill="var(--ui-chart-2)"
                   isAnimationActive={false}
                 />
               </BarChart>
@@ -646,10 +657,14 @@ export function ExpenseCategoryChart({
                 layout="vertical"
                 margin={{ top: 4, right: 8, left: 8, bottom: 0 }}
               >
-                <CartesianGrid stroke="#293548" strokeDasharray="3 3" horizontal={false} />
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  horizontal={false}
+                />
                 <XAxis
                   type="number"
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickFormatter={formatCompactMoney}
                   tickLine={false}
                   axisLine={false}
@@ -657,7 +672,7 @@ export function ExpenseCategoryChart({
                 <YAxis
                   type="category"
                   dataKey="category"
-                  tick={{ fill: "#cbd5e1", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-text-secondary)", fontSize: 12 }}
                   tickFormatter={formatCategoryAxis}
                   tickLine={false}
                   axisLine={false}
@@ -670,7 +685,7 @@ export function ExpenseCategoryChart({
                 <Bar
                   dataKey="amount"
                   name="Egresos"
-                  fill="#818cf8"
+                  fill="var(--ui-chart-2)"
                   radius={[0, 5, 5, 0]}
                   isAnimationActive={false}
                 />

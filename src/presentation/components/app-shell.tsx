@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/auth-context";
+import { ThemeSelector } from "./theme-selector";
 
 function HomeIcon() {
   return (
@@ -204,6 +205,12 @@ export function AppShell() {
           <LogoutIcon />
           Cerrar sesión
         </button>
+        <div className="mt-3 border-t border-slate-700/70 pt-3">
+          <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Apariencia
+          </p>
+          <ThemeSelector />
+        </div>
       </div>
     </>
   );
@@ -211,22 +218,25 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-surface text-slate-100">
       <div className="mobile-header">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="mobile-brand-mark" aria-hidden="true">
             ICBA
           </span>
-          <span className="text-sm font-bold text-slate-100">Finanzas ICBA</span>
+          <span className="truncate text-sm font-bold text-slate-100">Finanzas ICBA</span>
         </div>
-        <button
-          type="button"
-          className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100"
-          onClick={() => setSidebarOpen((open) => !open)}
-          aria-controls="app-sidebar"
-          aria-expanded={sidebarOpen}
-          aria-label={sidebarOpen ? "Cerrar menú" : "Abrir menú"}
-        >
-          {sidebarOpen ? <CloseIcon /> : <MenuIcon />}
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <ThemeSelector variant="compact" />
+          <button
+            type="button"
+            className="mobile-menu-button"
+            onClick={() => setSidebarOpen((open) => !open)}
+            aria-controls="app-sidebar"
+            aria-expanded={sidebarOpen}
+            aria-label={sidebarOpen ? "Cerrar menú" : "Abrir menú"}
+          >
+            {sidebarOpen ? <CloseIcon /> : <MenuIcon />}
+          </button>
+        </div>
       </div>
 
       {!isDesktop && sidebarOpen ? (

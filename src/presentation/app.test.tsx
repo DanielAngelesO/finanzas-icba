@@ -15,6 +15,7 @@ import { InMemoryTransactionRepository } from "../infrastructure/memory/in-memor
 import { makeTransaction } from "../test/fixtures";
 import { AuthContext, type AuthContextValue } from "./auth/auth-context";
 import { AppRoutes } from "./app";
+import { ThemeProvider } from "./theme/theme-provider";
 
 afterEach(cleanup);
 
@@ -80,13 +81,15 @@ const renderApp = (initialEntry: string, services = createServices()) => {
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authenticatedUser}>
-        <MemoryRouter initialEntries={[initialEntry]}>
-          <AppRoutes services={services} />
-        </MemoryRouter>
-      </AuthContext.Provider>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={authenticatedUser}>
+          <MemoryRouter initialEntries={[initialEntry]}>
+            <AppRoutes services={services} />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    </ThemeProvider>,
   );
 };
 

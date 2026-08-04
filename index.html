@@ -7,6 +7,7 @@
       name="description"
       content="Sistema de gestión financiera para la Iglesia Cristiana Bautista de las Américas"
     />
+    <meta name="theme-color" content="#F6F8F7" />
     <title>Finanzas ICBA · Administración financiera</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,6 +15,27 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (() => {
+        const storageKey = "finanzas-icba.theme";
+        let preference = "system";
+        try {
+          const saved = window.localStorage.getItem(storageKey);
+          if (saved === "light" || saved === "dark" || saved === "system") preference = saved;
+        } catch {
+          // Se conserva Sistema cuando el navegador bloquea el almacenamiento.
+        }
+        const isDark =
+          preference === "dark" ||
+          (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        const theme = isDark ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", isDark ? "#0A0E1A" : "#F6F8F7");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

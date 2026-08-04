@@ -6,6 +6,7 @@ import { createServices } from "../composition/services";
 import { AuthProvider } from "./auth/auth-provider";
 import { useAuth } from "./auth/auth-context";
 import { AppShell } from "./components/app-shell";
+import { ThemeSelector } from "./components/theme-selector";
 import { DashboardPage } from "./pages/dashboard-page";
 import { DataQualityPage } from "./pages/data-quality-page";
 import { DataSourcePage } from "./pages/data-source-page";
@@ -15,17 +16,11 @@ import { TransactionsPage } from "./pages/transactions-page";
 
 function UnconfiguredPage({ errors }: { errors: string[] }) {
   return (
-    <main
-      className="grid min-h-screen place-items-center px-4 text-slate-100"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 0%, rgba(251, 191, 36, 0.06) 0%, transparent 60%), #0a0e1a",
-      }}
-    >
-      <section
-        className="card animate-fade-in-up max-w-xl"
-        style={{ borderColor: "rgba(251, 191, 36, 0.15)" }}
-      >
+    <main className="auth-page grid min-h-screen place-items-center px-4 text-slate-100">
+      <div className="auth-theme-control">
+        <ThemeSelector variant="compact" />
+      </div>
+      <section className="card configuration-card animate-fade-in-up max-w-xl">
         <p className="text-sm font-semibold text-amber-400">Sin configurar</p>
         <h1 className="page-title mt-2">Falta configurar Google Sheets</h1>
         <p className="mt-3 text-sm text-slate-400">

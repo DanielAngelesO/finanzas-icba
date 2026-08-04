@@ -26,13 +26,20 @@ import {
   formatShortPeriod,
 } from "../formatters";
 
-const chartPalette = ["#34d399", "#818cf8", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa"];
+const chartPalette = [
+  "var(--ui-chart-1)",
+  "var(--ui-chart-2)",
+  "var(--ui-chart-3)",
+  "var(--ui-chart-4)",
+  "var(--ui-chart-5)",
+  "var(--ui-chart-6)",
+];
 
 const tooltipStyle = {
-  border: "1px solid #293548",
+  border: "1px solid var(--ui-border)",
   borderRadius: "0.75rem",
-  background: "#111827",
-  color: "#e2e8f0",
+  background: "var(--ui-surface)",
+  color: "var(--ui-text)",
 };
 
 const formatChartPeriod = (value: string): string => formatShortPeriod(value).replace(".", "");
@@ -64,17 +71,21 @@ export function ExpenseTrendChart({ trend }: { trend: ExpenseTrendPoint[] }) {
           <div className="mt-5 h-72 min-w-0 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="period"
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickFormatter={formatChartPeriod}
                   tickLine={false}
                   axisLine={false}
                   minTickGap={20}
                 />
                 <YAxis
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickFormatter={formatCompactMoney}
                   tickLine={false}
                   axisLine={false}
@@ -82,29 +93,29 @@ export function ExpenseTrendChart({ trend }: { trend: ExpenseTrendPoint[] }) {
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+                  cursor={{ fill: "var(--ui-chart-cursor)" }}
                   formatter={(value) => formatMoney(Number(value))}
                   labelFormatter={(label) => formatPeriod(String(label))}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, color: "#cbd5e1" }} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "var(--ui-text-secondary)" }} />
                 <Bar
                   dataKey="salariesAndFeesAmount"
                   name="Salarios y Honorarios"
                   stackId="expenses"
-                  fill="#fbbf24"
+                  fill="var(--ui-chart-4)"
                   isAnimationActive={false}
                 />
                 <Bar
                   dataKey="otherExpensesAmount"
                   name="Otros gastos"
                   stackId="expenses"
-                  fill="#818cf8"
+                  fill="var(--ui-chart-2)"
                   isAnimationActive={false}
                 />
                 <Line
                   dataKey="comparisonAmount"
                   name="Período anterior equivalente"
-                  stroke="#34d399"
+                  stroke="var(--ui-chart-1)"
                   strokeDasharray="5 4"
                   strokeWidth={2}
                   dot={false}
@@ -186,10 +197,14 @@ export function ExpenseBreakdownChart({
                 layout="vertical"
                 margin={{ top: 4, right: 8, left: 8, bottom: 0 }}
               >
-                <CartesianGrid stroke="#293548" strokeDasharray="3 3" horizontal={false} />
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  horizontal={false}
+                />
                 <XAxis
                   type="number"
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
                   tickFormatter={formatCompactMoney}
                   tickLine={false}
                   axisLine={false}
@@ -197,7 +212,7 @@ export function ExpenseBreakdownChart({
                 <YAxis
                   type="category"
                   dataKey="chartLabel"
-                  tick={{ fill: "#cbd5e1", fontSize: 12 }}
+                  tick={{ fill: "var(--ui-text-secondary)", fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   width={112}
@@ -209,7 +224,7 @@ export function ExpenseBreakdownChart({
                 <Bar dataKey="amount" name="Monto" radius={[0, 5, 5, 0]} isAnimationActive={false}>
                   {chartData.map((item, index) => (
                     <Cell
-                      fill={chartPalette[index % chartPalette.length] ?? "#34d399"}
+                      fill={chartPalette[index % chartPalette.length] ?? "var(--ui-chart-1)"}
                       key={`${item.kind}-${item.label}`}
                     />
                   ))}
@@ -227,7 +242,8 @@ export function ExpenseBreakdownChart({
                   <span
                     className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{
-                      backgroundColor: chartPalette[index % chartPalette.length] ?? "#34d399",
+                      backgroundColor:
+                        chartPalette[index % chartPalette.length] ?? "var(--ui-chart-1)",
                     }}
                     aria-hidden="true"
                   />

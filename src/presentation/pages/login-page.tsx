@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/auth-context";
+import { ThemeSelector } from "../components/theme-selector";
 
 function GoogleIcon() {
   return (
@@ -29,28 +30,14 @@ export function LoginPage() {
   if (state.status === "authenticated") return <Navigate to="/" replace />;
   const busy = state.status === "authorizing";
   return (
-    <main
-      className="grid min-h-screen place-items-center px-4 text-slate-100"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 0%, rgba(52, 211, 153, 0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(129, 140, 248, 0.06) 0%, transparent 50%), #0a0e1a",
-      }}
-    >
+    <main className="auth-page grid min-h-screen place-items-center px-4 text-slate-100">
+      <div className="auth-theme-control">
+        <ThemeSelector variant="compact" />
+      </div>
       <section className="animate-fade-in-up w-full max-w-md">
-        {/* Card */}
-        <div className="card space-y-6" style={{ borderColor: "rgba(52, 211, 153, 0.1)" }}>
-          {/* Header */}
+        <div className="card auth-card space-y-6">
           <div className="text-center">
-            <div
-              className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-[0.65rem] font-extrabold tracking-[0.08em] text-emerald-300"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))",
-                boxShadow: "0 4px 20px rgba(52, 211, 153, 0.15)",
-              }}
-            >
-              ICBA
-            </div>
+            <div className="auth-brand-mark mx-auto mb-4">ICBA</div>
             <p className="text-sm font-semibold text-emerald-400">Finanzas ICBA</p>
             <h1 className="page-title mt-2">Acceso al sistema</h1>
             <p className="mt-3 text-sm leading-6 text-slate-400">
