@@ -3,12 +3,16 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { AppServices } from "../../composition/services";
 import type { ConnectionStatus } from "../../domain/diagnostics";
 import {
-  ExpenseCategoryList,
+  BalanceTrendChart,
+  ContributionChart,
+  ExpenseCategoryChart,
   FinancialTrendChart,
+  IncomeCategoryChart,
   RecentTransactionList,
+  SalaryExpenseComparison,
 } from "../components/dashboard-widgets";
 import { StatusBadge } from "../components/status-badge";
-import { formatDate, formatMoney, formatPeriod } from "../formatters";
+import { formatDate, formatMoney, formatPercent, formatPeriod } from "../formatters";
 
 const getConnectionStatus = (
   isPending: boolean,
@@ -58,8 +62,8 @@ export function DashboardPage({ services }: { services: AppServices }) {
           </div>
           <StatusBadge status={connectionStatus} />
         </section>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-hidden="true">
-          {[0, 1, 2, 3].map((index) => (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+          {[0, 1, 2, 3, 4, 5].map((index) => (
             <div className="shimmer h-32" key={index} />
           ))}
         </div>
@@ -84,7 +88,7 @@ export function DashboardPage({ services }: { services: AppServices }) {
     ? "/movimientos?period=" + data.selectedPeriod
     : "/movimientos";
 
-  if (!data.summary) {
+  if (!data.summary || !data.accumulated || !data.expenseComposition || !data.expenseInsights) {
     return (
       <div className="space-y-8 animate-fade-in-up">
         <section className="flex flex-wrap items-start justify-between gap-4">
@@ -112,7 +116,12 @@ export function DashboardPage({ services }: { services: AppServices }) {
   const metrics = [
     ["Ingresos", formatMoney(data.summary.income), "stat-card-emerald"],
     ["Egresos", formatMoney(data.summary.expense), "stat-card-rose"],
-    ["Resultado del período", formatMoney(data.summary.netResult), "stat-card-indigo"],
+    ["Saldo del período", formatMoney(data.summary.netResult), "stat-card-indigo"],
+    [
+      "Tasa de ahorro",
+      data.summary.savingsRate === null ? "No aplica" : formatPercent(data.summary.savingsRate),
+      "stat-card-sky",
+    ],
     ["Movimientos", data.summary.transactionCount.toLocaleString("es-PE"), "stat-card-sky"],
   ] as const;
 
@@ -169,7 +178,7 @@ export function DashboardPage({ services }: { services: AppServices }) {
       ) : null}
 
       <section
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
         aria-label="Indicadores del período"
       >
         {metrics.map(([label, value, accent], index) => (
@@ -182,11 +191,67 @@ export function DashboardPage({ services }: { services: AppServices }) {
             <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">{value}</p>
           </article>
         ))}
+        <article className="stat-card stat-card-emerald" style={{ animationDelay: "400ms" }}>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+            Saldo acumulado
+          </p>
+          <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">
+            {formatMoney(data.accumulated.balance)}
+          </p>
+          <details className="mt-3 text-xs text-slate-400">
+            <summary className="cursor-pointer font-medium text-emerald-300 hover:text-emerald-200">
+              Ver acumulados
+            </summary>
+            <dl className="mt-2 space-y-1 border-t border-slate-700/70 pt-2 tabular-nums">
+              <div className="flex justify-between gap-3">
+                <dt>Ingresos</dt>
+                <dd className="text-slate-200">{formatMoney(data.accumulated.income)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt>Egresos</dt>
+                <dd className="text-slate-200">{formatMoney(data.accumulated.expense)}</dd>
+              </div>
+            </dl>
+          </details>
+        </article>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]">
+      <section className="grid gap-6 2xl:grid-cols-2" aria-label="Tendencias financieras">
         <FinancialTrendChart trend={data.trend} />
-        <ExpenseCategoryList categories={data.expenseCategories} />
+        <BalanceTrendChart trend={data.trend} />
+      </section>
+
+      <section className="space-y-4" aria-labelledby="income-summary-title">
+        <div>
+          <h3 className="section-title" id="income-summary-title">
+            Resumen de ingresos
+          </h3>
+          <p className="mt-1 text-sm text-slate-400">
+            Origen y frecuencia de los aportes del período.
+          </p>
+        </div>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <IncomeCategoryChart categories={data.incomeCategories} />
+          <ContributionChart contributions={data.contributions} />
+        </div>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="expense-summary-title">
+        <div>
+          <h3 className="section-title" id="expense-summary-title">
+            Resumen ejecutivo de egresos
+          </h3>
+          <p className="mt-1 text-sm text-slate-400">
+            Separación de Salarios y Honorarios frente a los demás gastos.
+          </p>
+        </div>
+        <div className="grid gap-6 2xl:grid-cols-[minmax(19rem,0.9fr)_minmax(0,1.4fr)]">
+          <SalaryExpenseComparison composition={data.expenseComposition} />
+          <ExpenseCategoryChart
+            categories={data.expenseCategories}
+            insights={data.expenseInsights}
+          />
+        </div>
       </section>
 
       <RecentTransactionList transactions={data.recentTransactions} movementsHref={movementsHref} />

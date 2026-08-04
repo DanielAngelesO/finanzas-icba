@@ -18,12 +18,37 @@ const compactDateFormatter = new Intl.DateTimeFormat("es-PE", {
   year: "numeric",
 });
 
+const percentFormatter = new Intl.NumberFormat("es-PE", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
+const compactCurrencyFormatter = new Intl.NumberFormat("es-PE", {
+  style: "currency",
+  currency: "PEN",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 export const formatMoney = (amount: number): string => currencyFormatter.format(amount);
+
+export const formatCompactMoney = (amount: number): string =>
+  compactCurrencyFormatter.format(amount);
+
+export const formatPercent = (rate: number): string => percentFormatter.format(rate);
 
 export const formatPeriod = (period: string): string => {
   const year = Number(period.slice(0, 4));
   const month = Number(period.slice(4, 6));
   return periodFormatter.format(new Date(year, month - 1, 1, 12));
+};
+
+export const formatShortPeriod = (period: string): string => {
+  const year = Number(period.slice(0, 4));
+  const month = Number(period.slice(4, 6));
+  return new Intl.DateTimeFormat("es-PE", { month: "short" }).format(
+    new Date(year, month - 1, 1, 12),
+  );
 };
 
 export const formatCompactDate = (date: Date): string => compactDateFormatter.format(date);

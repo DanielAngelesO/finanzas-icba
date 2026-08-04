@@ -20,6 +20,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "latest",
+    "recharts": "^3.10.1",
     "zod": "latest"
   },
   "devDependencies": {

@@ -54,7 +54,7 @@ La hoja debe contener los encabezados definidos en `src/config/google-sheets.ts`
 
 ## Pantallas
 
-- `/`: resumen financiero del período más reciente, con selector `?period=YYYYMM`, indicadores, evolución, distribución de egresos y cinco movimientos recientes.
+- `/`: resumen financiero del período más reciente, con selector `?period=YYYYMM`, seis indicadores, acumulados desplegables, tendencias de seis meses, composición de ingresos, aportes de ofrendas/diezmos y análisis ejecutivo de egresos. Los egresos separan `Salarios y Honorarios` de las demás categorías; el ranking detallado excluye esa categoría.
 - `/movimientos`: consulta de operaciones por período, tipo o ID.
 - `/control/calidad`: conteos de validación y problemas por fila.
 - `/control/fuente`: conexión y metadatos no sensibles de la fuente.

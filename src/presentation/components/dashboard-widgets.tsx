@@ -1,72 +1,139 @@
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Link } from "react-router-dom";
-import type { DashboardExpenseCategory, DashboardPeriodSummary } from "../../domain/dashboard";
+import type {
+  DashboardCategorySummary,
+  DashboardContributionSummary,
+  DashboardExpenseComposition,
+  DashboardExpenseInsights,
+  DashboardTrendPoint,
+} from "../../domain/dashboard";
 import type { Transaction } from "../../domain/transaction";
-import { formatCompactDate, formatMoney, formatPeriod } from "../formatters";
+import {
+  formatCompactDate,
+  formatCompactMoney,
+  formatMoney,
+  formatPercent,
+  formatPeriod,
+  formatShortPeriod,
+} from "../formatters";
 
-const getBarHeight = (amount: number, maximum: number): string => {
-  if (amount === 0) return "0%";
-  return String(Math.max((amount / maximum) * 100, 3)) + "%";
+const chartPalette = ["#34d399", "#818cf8", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa"];
+
+const getChartColor = (index: number): string =>
+  chartPalette[index % chartPalette.length] ?? "#34d399";
+
+const tooltipStyle = {
+  border: "1px solid #293548",
+  borderRadius: "0.75rem",
+  background: "#111827",
+  color: "#e2e8f0",
 };
 
-export function FinancialTrendChart({ trend }: { trend: DashboardPeriodSummary[] }) {
-  if (trend.length === 0) {
-    return (
-      <section className="card min-w-0">
-        <h3 className="section-title">Evolución financiera</h3>
-        <p className="empty-state mt-4">No hay períodos suficientes para mostrar una evolución.</p>
-      </section>
-    );
-  }
+const formatChartPeriod = (value: string): string => formatShortPeriod(value).replace(".", "");
 
-  const maximum = Math.max(...trend.flatMap((summary) => [summary.income, summary.expense]), 1);
+const formatCategoryAxis = (value: string): string =>
+  value.length > 17 ? value.slice(0, 16) + "…" : value;
 
+function ChartEmptyState({ children }: { children: string }) {
+  return <p className="empty-state mt-5">{children}</p>;
+}
+
+function CategoryList({ categories }: { categories: DashboardCategorySummary[] }) {
+  return (
+    <ol className="mt-5 space-y-3">
+      {categories.map((category, index) => (
+        <li className="flex items-start gap-3" key={category.category}>
+          <span
+            className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: getChartColor(index) }}
+            aria-hidden="true"
+          />
+          <span className="min-w-0 flex-1 text-sm text-slate-200">{category.category}</span>
+          <span className="shrink-0 text-right text-sm tabular-nums text-slate-300">
+            {formatMoney(category.amount)}
+            <span className="ml-2 text-xs text-slate-500">{formatPercent(category.share)}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function FinancialTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
   return (
     <figure className="card min-w-0" aria-labelledby="financial-trend-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="section-title" id="financial-trend-title">
-            Evolución financiera
-          </h3>
-          <p className="mt-1 text-sm text-slate-400">Ingresos y egresos de los últimos períodos.</p>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-slate-400" aria-label="Leyenda">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" aria-hidden="true" />
-            Ingresos
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-rose-400" aria-hidden="true" />
-            Egresos
-          </span>
-        </div>
+      <div>
+        <h3 className="section-title" id="financial-trend-title">
+          Ingresos frente a egresos
+        </h3>
+        <p className="mt-1 text-sm text-slate-400">Evolución de los últimos seis meses.</p>
       </div>
-      <div
-        className="mt-6 flex h-52 items-end gap-2 border-b border-slate-700/70 pb-1 sm:h-60 sm:gap-4"
-        aria-hidden="true"
-      >
-        {trend.map((summary) => (
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-2" key={summary.period}>
-            <div className="flex h-44 w-full max-w-14 items-end justify-center gap-1 sm:h-52 sm:gap-1.5">
-              <span
-                className="w-2 rounded-t bg-emerald-400 sm:w-3"
-                style={{ height: getBarHeight(summary.income, maximum) }}
-              />
-              <span
-                className="w-2 rounded-t bg-rose-400 sm:w-3"
-                style={{ height: getBarHeight(summary.expense, maximum) }}
-              />
-            </div>
-            <span className="max-w-full truncate text-[11px] text-slate-500">
-              {formatPeriod(summary.period).split(" ")[0]}
-            </span>
-          </div>
-        ))}
+      <div className="mt-5 h-72 min-w-0 sm:h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            accessibilityLayer
+            data={trend}
+            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="period"
+              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tickFormatter={formatChartPeriod}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tickFormatter={formatCompactMoney}
+              tickLine={false}
+              axisLine={false}
+              width={68}
+            />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+              formatter={(value) => formatMoney(Number(value))}
+              labelFormatter={(label) => formatPeriod(String(label))}
+            />
+            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "0.75rem" }} />
+            <Bar
+              dataKey="income"
+              name="Ingresos"
+              fill="#34d399"
+              radius={[5, 5, 0, 0]}
+              isAnimationActive={false}
+            />
+            <Bar
+              dataKey="expense"
+              name="Egresos"
+              fill="#fb7185"
+              radius={[5, 5, 0, 0]}
+              isAnimationActive={false}
+            />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
       <figcaption className="sr-only">
-        Comparación de ingresos y egresos para {trend.length} períodos.
+        Comparación de ingresos y egresos para los últimos seis meses.
       </figcaption>
       <table className="sr-only">
-        <caption>Valores de evolución financiera</caption>
+        <caption>Valores de ingresos y egresos por período</caption>
         <thead>
           <tr>
             <th scope="col">Período</th>
@@ -88,43 +155,495 @@ export function FinancialTrendChart({ trend }: { trend: DashboardPeriodSummary[]
   );
 }
 
-export function ExpenseCategoryList({ categories }: { categories: DashboardExpenseCategory[] }) {
-  const maximum = Math.max(...categories.map((category) => category.amount), 1);
+export function BalanceTrendChart({ trend }: { trend: DashboardTrendPoint[] }) {
+  return (
+    <figure className="card min-w-0" aria-labelledby="balance-trend-title">
+      <div>
+        <h3 className="section-title" id="balance-trend-title">
+          Saldo acumulado y resultado mensual
+        </h3>
+        <p className="mt-1 text-sm text-slate-400">
+          El saldo acumulado considera todo el historial hasta el corte.
+        </p>
+      </div>
+      <div className="mt-5 h-72 min-w-0 sm:h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart
+            accessibilityLayer
+            data={trend}
+            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="period"
+              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tickFormatter={formatChartPeriod}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fill: "#94a3b8", fontSize: 12 }}
+              tickFormatter={formatCompactMoney}
+              tickLine={false}
+              axisLine={false}
+              width={68}
+            />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+              formatter={(value) => formatMoney(Number(value))}
+              labelFormatter={(label) => formatPeriod(String(label))}
+            />
+            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "0.75rem" }} />
+            <ReferenceLine y={0} stroke="#64748b" strokeDasharray="4 4" />
+            <Bar
+              dataKey="netResult"
+              name="Saldo neto mensual"
+              fill="#818cf8"
+              radius={[5, 5, 0, 0]}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="cumulativeBalance"
+              name="Saldo acumulado"
+              stroke="#34d399"
+              strokeWidth={3}
+              dot={{ fill: "#34d399", r: 3 }}
+              activeDot={{ r: 5 }}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <figcaption className="sr-only">
+        Evolución del saldo neto mensual y del saldo acumulado.
+      </figcaption>
+      <table className="sr-only">
+        <caption>Valores de saldo acumulado y resultado mensual</caption>
+        <thead>
+          <tr>
+            <th scope="col">Período</th>
+            <th scope="col">Saldo neto mensual</th>
+            <th scope="col">Saldo acumulado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trend.map((summary) => (
+            <tr key={summary.period}>
+              <th scope="row">{formatPeriod(summary.period)}</th>
+              <td>{formatMoney(summary.netResult)}</td>
+              <td>{formatMoney(summary.cumulativeBalance)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </figure>
+  );
+}
 
+export function IncomeCategoryChart({ categories }: { categories: DashboardCategorySummary[] }) {
+  return (
+    <section className="card min-w-0" aria-labelledby="income-categories-title">
+      <div>
+        <h3 className="section-title" id="income-categories-title">
+          Ingresos por categoría
+        </h3>
+        <p className="mt-1 text-sm text-slate-400">Participación del ingreso del período.</p>
+      </div>
+      {categories.length === 0 ? (
+        <ChartEmptyState>No se registraron ingresos en este período.</ChartEmptyState>
+      ) : (
+        <>
+          <div className="mt-4 h-64 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart accessibilityLayer>
+                <Pie
+                  data={categories}
+                  dataKey="amount"
+                  nameKey="category"
+                  innerRadius="58%"
+                  outerRadius="82%"
+                  paddingAngle={2}
+                  isAnimationActive={false}
+                >
+                  {categories.map((category, index) => (
+                    <Cell fill={getChartColor(index)} key={category.category} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value) => formatMoney(Number(value))}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <CategoryList categories={categories} />
+          <table className="sr-only">
+            <caption>Ingresos por categoría</caption>
+            <thead>
+              <tr>
+                <th scope="col">Categoría</th>
+                <th scope="col">Monto</th>
+                <th scope="col">Participación</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category) => (
+                <tr key={category.category}>
+                  <th scope="row">{category.category}</th>
+                  <td>{formatMoney(category.amount)}</td>
+                  <td>{formatPercent(category.share)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function ContributionChart({
+  contributions,
+}: {
+  contributions: DashboardContributionSummary[];
+}) {
+  const hasContributions = contributions.some((contribution) => contribution.transactionCount > 0);
+
+  return (
+    <section className="card min-w-0" aria-labelledby="contributions-title">
+      <div>
+        <h3 className="section-title" id="contributions-title">
+          Ofrendas y diezmos
+        </h3>
+        <p className="mt-1 text-sm text-slate-400">
+          Cantidad de aportes registrados en el período.
+        </p>
+      </div>
+      {!hasContributions ? (
+        <ChartEmptyState>No se registraron ofrendas ni diezmos en este período.</ChartEmptyState>
+      ) : (
+        <>
+          <div className="mt-5 h-64 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                accessibilityLayer
+                data={contributions}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid stroke="#293548" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="kind"
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tickFormatter={(value) => String(value).toLocaleLowerCase("es-PE")}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={34}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value, name, item) => {
+                    const amount = Number(item.payload?.amount ?? 0);
+                    return [String(value) + " aportes · " + formatMoney(amount), name];
+                  }}
+                />
+                <Bar
+                  dataKey="transactionCount"
+                  name="Aportes"
+                  fill="#38bdf8"
+                  radius={[5, 5, 0, 0]}
+                  isAnimationActive={false}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+            {contributions.map((contribution) => (
+              <div
+                className="rounded-xl border border-slate-700/70 bg-slate-950/20 p-3"
+                key={contribution.kind}
+              >
+                <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                  {contribution.kind === "OFRENDAS" ? "Ofrendas" : "Diezmos"}
+                </dt>
+                <dd className="mt-2 text-sm font-semibold tabular-nums text-slate-100">
+                  {contribution.transactionCount.toLocaleString("es-PE")} aportes
+                </dd>
+                <dd className="mt-1 text-xs tabular-nums text-slate-400">
+                  {formatMoney(contribution.amount)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <table className="sr-only">
+            <caption>Ofrendas y diezmos por período</caption>
+            <thead>
+              <tr>
+                <th scope="col">Tipo</th>
+                <th scope="col">Aportes</th>
+                <th scope="col">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contributions.map((contribution) => (
+                <tr key={contribution.kind}>
+                  <th scope="row">{contribution.kind}</th>
+                  <td>{contribution.transactionCount}</td>
+                  <td>{formatMoney(contribution.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function SalaryExpenseComparison({
+  composition,
+}: {
+  composition: DashboardExpenseComposition;
+}) {
+  const total = composition.salariesAndFees.amount + composition.otherExpenses.amount;
+  const chartData = [
+    {
+      label: "Egresos",
+      salariesAndFees: composition.salariesAndFees.amount,
+      otherExpenses: composition.otherExpenses.amount,
+    },
+  ];
+
+  return (
+    <section className="card min-w-0" aria-labelledby="expense-composition-title">
+      <div>
+        <h3 className="section-title" id="expense-composition-title">
+          Salarios frente a otros gastos
+        </h3>
+        <p className="mt-1 text-sm text-slate-400">Distribución de los egresos del período.</p>
+      </div>
+      {total === 0 ? (
+        <ChartEmptyState>No se registraron egresos en este período.</ChartEmptyState>
+      ) : (
+        <>
+          <div className="mt-6 h-20 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                accessibilityLayer
+                data={chartData}
+                layout="vertical"
+                margin={{ left: 0, right: 0 }}
+              >
+                <XAxis type="number" domain={[0, total]} hide />
+                <YAxis type="category" dataKey="label" hide />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value) => formatMoney(Number(value))}
+                />
+                <Bar
+                  dataKey="salariesAndFees"
+                  name="Salarios y Honorarios"
+                  stackId="expenses"
+                  fill="#fbbf24"
+                  isAnimationActive={false}
+                />
+                <Bar
+                  dataKey="otherExpenses"
+                  name="Demás categorías"
+                  stackId="expenses"
+                  fill="#818cf8"
+                  isAnimationActive={false}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+            <ExpenseGroupSummary
+              label="Salarios y Honorarios"
+              amount={composition.salariesAndFees.amount}
+              transactionCount={composition.salariesAndFees.transactionCount}
+              share={composition.salariesAndFees.share}
+              colorClass="text-amber-300"
+            />
+            <ExpenseGroupSummary
+              label="Demás categorías"
+              amount={composition.otherExpenses.amount}
+              transactionCount={composition.otherExpenses.transactionCount}
+              share={composition.otherExpenses.share}
+              colorClass="text-indigo-300"
+            />
+          </dl>
+          <table className="sr-only">
+            <caption>Comparación de salarios y otros gastos</caption>
+            <thead>
+              <tr>
+                <th scope="col">Grupo</th>
+                <th scope="col">Monto</th>
+                <th scope="col">Transacciones</th>
+                <th scope="col">Participación</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Salarios y Honorarios</th>
+                <td>{formatMoney(composition.salariesAndFees.amount)}</td>
+                <td>{composition.salariesAndFees.transactionCount}</td>
+                <td>{formatPercent(composition.salariesAndFees.share)}</td>
+              </tr>
+              <tr>
+                <th scope="row">Demás categorías</th>
+                <td>{formatMoney(composition.otherExpenses.amount)}</td>
+                <td>{composition.otherExpenses.transactionCount}</td>
+                <td>{formatPercent(composition.otherExpenses.share)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ExpenseGroupSummary({
+  label,
+  amount,
+  transactionCount,
+  share,
+  colorClass,
+}: {
+  label: string;
+  amount: number;
+  transactionCount: number;
+  share: number;
+  colorClass: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-700/70 bg-slate-950/20 p-3">
+      <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</dt>
+      <dd className={"mt-2 text-sm font-semibold tabular-nums " + colorClass}>
+        {formatMoney(amount)}
+      </dd>
+      <dd className="mt-1 text-xs text-slate-400">
+        {formatPercent(share)} · {transactionCount.toLocaleString("es-PE")} movimientos
+      </dd>
+    </div>
+  );
+}
+
+export function ExpenseCategoryChart({
+  categories,
+  insights,
+}: {
+  categories: DashboardCategorySummary[];
+  insights: DashboardExpenseInsights;
+}) {
   return (
     <section className="card min-w-0" aria-labelledby="expense-categories-title">
       <div>
         <h3 className="section-title" id="expense-categories-title">
-          Egresos por categoría
+          Gastos no salariales por categoría
         </h3>
-        <p className="mt-1 text-sm text-slate-400">Principales destinos del gasto del período.</p>
+        <p className="mt-1 text-sm text-slate-400">
+          Salarios y Honorarios se excluye de este análisis ejecutivo.
+        </p>
       </div>
       {categories.length === 0 ? (
-        <p className="empty-state mt-4">No se registraron egresos en este período.</p>
+        <ChartEmptyState>No se registraron gastos fuera de Salarios y Honorarios.</ChartEmptyState>
       ) : (
-        <ol className="mt-5 space-y-4">
-          {categories.map((category) => (
-            <li key={category.category}>
-              <div className="flex items-baseline justify-between gap-4">
-                <span className="min-w-0 truncate text-sm font-medium text-slate-200">
-                  {category.category}
-                </span>
-                <span className="shrink-0 text-sm tabular-nums text-slate-300">
-                  {formatMoney(category.amount)}
-                </span>
-              </div>
-              <div
-                className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"
-                aria-hidden="true"
+        <>
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-700/70 bg-slate-950/20 p-3">
+              <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Rubro principal
+              </dt>
+              <dd className="mt-2 text-sm font-semibold text-slate-100">
+                {insights.leadingCategory?.category ?? "Sin datos"}
+              </dd>
+              <dd className="mt-1 text-xs tabular-nums text-slate-400">
+                {insights.leadingCategory ? formatMoney(insights.leadingCategory.amount) : ""}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-slate-700/70 bg-slate-950/20 p-3">
+              <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Concentración top 3
+              </dt>
+              <dd className="mt-2 text-sm font-semibold tabular-nums text-slate-100">
+                {insights.topThreeShare === null
+                  ? "Sin datos"
+                  : formatPercent(insights.topThreeShare)}
+              </dd>
+              <dd className="mt-1 text-xs text-slate-400">De los gastos no salariales.</dd>
+            </div>
+          </dl>
+          <div className="mt-5 h-72 min-w-0 sm:h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                accessibilityLayer
+                data={categories}
+                layout="vertical"
+                margin={{ top: 4, right: 8, left: 8, bottom: 0 }}
               >
-                <div
-                  className="h-full rounded-full bg-indigo-400"
-                  style={{ width: String((category.amount / maximum) * 100) + "%" }}
+                <CartesianGrid stroke="#293548" strokeDasharray="3 3" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  tickFormatter={formatCompactMoney}
+                  tickLine={false}
+                  axisLine={false}
                 />
-              </div>
-            </li>
-          ))}
-        </ol>
+                <YAxis
+                  type="category"
+                  dataKey="category"
+                  tick={{ fill: "#cbd5e1", fontSize: 12 }}
+                  tickFormatter={formatCategoryAxis}
+                  tickLine={false}
+                  axisLine={false}
+                  width={108}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value) => formatMoney(Number(value))}
+                />
+                <Bar
+                  dataKey="amount"
+                  name="Egresos"
+                  fill="#818cf8"
+                  radius={[0, 5, 5, 0]}
+                  isAnimationActive={false}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <CategoryList categories={categories} />
+          <table className="sr-only">
+            <caption>Gastos no salariales por categoría</caption>
+            <thead>
+              <tr>
+                <th scope="col">Categoría</th>
+                <th scope="col">Monto</th>
+                <th scope="col">Transacciones</th>
+                <th scope="col">Participación</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category) => (
+                <tr key={category.category}>
+                  <th scope="row">{category.category}</th>
+                  <td>{formatMoney(category.amount)}</td>
+                  <td>{category.transactionCount}</td>
+                  <td>{formatPercent(category.share)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </section>
   );

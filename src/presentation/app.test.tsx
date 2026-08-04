@@ -113,7 +113,9 @@ describe("navegación principal", () => {
 
     const periodSelect = await screen.findByRole("combobox", { name: "Período" });
     const indicators = screen.getByLabelText("Indicadores del período");
-    const initialIncomeCard = within(indicators).getByText("Ingresos").closest("article");
+    const initialIncomeCard = within(indicators)
+      .getByText("Ingresos", { selector: "p" })
+      .closest("article");
     if (!initialIncomeCard) throw new Error("No se encontró el indicador de ingresos.");
     expect(initialIncomeCard).toHaveTextContent("1,000.00");
     expect(periodSelect).toHaveValue("202608");
@@ -125,7 +127,9 @@ describe("navegación principal", () => {
 
     await waitFor(() => {
       expect(periodSelect).toHaveValue("202607");
-      const selectedIncomeCard = within(indicators).getByText("Ingresos").closest("article");
+      const selectedIncomeCard = within(indicators)
+        .getByText("Ingresos", { selector: "p" })
+        .closest("article");
       if (!selectedIncomeCard) throw new Error("No se encontró el indicador de ingresos.");
       expect(selectedIncomeCard).toHaveTextContent("700.00");
     });
@@ -133,6 +137,23 @@ describe("navegación principal", () => {
       "href",
       "/movimientos?period=202607",
     );
+  });
+
+  it("muestra los seis indicadores y permite revelar el detalle acumulado", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+
+    const indicators = await screen.findByLabelText("Indicadores del período");
+    expect(within(indicators).getByText("Tasa de ahorro")).toBeInTheDocument();
+    expect(within(indicators).getByText("Saldo acumulado")).toBeInTheDocument();
+    const accumulatedDetail = within(indicators).getByText("Ver acumulados").closest("details");
+    if (!accumulatedDetail) throw new Error("No se encontró el detalle acumulado.");
+    expect(accumulatedDetail).not.toHaveAttribute("open");
+
+    await user.click(within(indicators).getByText("Ver acumulados"));
+
+    expect(accumulatedDetail).toHaveAttribute("open");
+    expect(within(accumulatedDetail).getByText("Egresos")).toBeInTheDocument();
   });
 
   it("marca el destino activo y cierra el menú móvil al navegar", async () => {
