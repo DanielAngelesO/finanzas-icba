@@ -716,6 +716,7 @@
 }
 @utility transaction-detail-trigger {
   min-height: 2.75rem;
+  min-width: 6.25rem;
   flex-shrink: 0;
   padding-left: 0.75rem;
   padding-right: 0.75rem;
@@ -747,7 +748,7 @@
     width: 8rem;
   }
   & th:nth-child(7) {
-    width: 7.5rem;
+    width: 9rem;
   }
   & td {
     overflow: hidden;
@@ -755,6 +756,34 @@
 }
 @utility transaction-table-concept {
   min-width: 0;
+}
+@utility transaction-preview {
+  margin-top: 0.25rem;
+  min-width: 0;
+  font-size: 0.75rem;
+}
+@utility transaction-preview-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@utility transaction-preview-category {
+  color: var(--ui-text-faint);
+}
+@utility transaction-preview-separator {
+  color: var(--ui-border);
+}
+@utility transaction-preview-donor {
+  color: var(--ui-success-text);
+  font-weight: 600;
+}
+@utility transaction-preview-date {
+  margin-top: 0.125rem;
+  overflow: hidden;
+  color: var(--ui-text-muted);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @utility transaction-pagination {
   display: flex;
@@ -792,10 +821,12 @@
   background: linear-gradient(145deg, #141c2e, #0f172a);
   box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.45);
   @media (min-width: 640px) {
-    inset: auto;
+    left: 50%;
+    top: 50%;
     width: min(42rem, calc(100vw - 3rem));
-    margin: auto;
+    margin: 0;
     border-radius: 1.25rem;
+    transform: translate(-50%, -50%);
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.52);
   }
   &::backdrop {

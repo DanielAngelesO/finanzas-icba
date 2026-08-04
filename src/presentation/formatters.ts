@@ -18,6 +18,21 @@ const compactDateFormatter = new Intl.DateTimeFormat("es-PE", {
   year: "numeric",
 });
 
+const previewWeekdayFormatter = new Intl.DateTimeFormat("es-PE", {
+  weekday: "long",
+  timeZone: "America/Lima",
+});
+
+const previewDayFormatter = new Intl.DateTimeFormat("es-PE", {
+  day: "numeric",
+  timeZone: "America/Lima",
+});
+
+const previewMonthFormatter = new Intl.DateTimeFormat("es-PE", {
+  month: "numeric",
+  timeZone: "America/Lima",
+});
+
 const percentFormatter = new Intl.NumberFormat("es-PE", {
   style: "percent",
   maximumFractionDigits: 1,
@@ -54,3 +69,11 @@ export const formatShortPeriod = (period: string): string => {
 export const formatCompactDate = (date: Date): string => compactDateFormatter.format(date);
 
 export const formatDate = (date: Date): string => dateFormatter.format(date);
+
+export const formatPreviewDate = (date: Date): string => {
+  const weekday = previewWeekdayFormatter.format(date);
+  const capitalizedWeekday = weekday.charAt(0).toLocaleUpperCase("es-PE") + weekday.slice(1);
+  const day = previewDayFormatter.format(date).padStart(2, "0");
+  const month = previewMonthFormatter.format(date).padStart(2, "0");
+  return `${capitalizedWeekday} ${day}/${month}`;
+};

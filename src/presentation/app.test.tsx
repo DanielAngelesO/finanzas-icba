@@ -259,9 +259,41 @@ describe("explorador de movimientos", () => {
       id: "ING-JULIO",
       date: new Date("2026-07-31T05:00:00.000Z"),
       description: "Aporte de julio",
-      category: "Diezmos",
+      donorOrProvider: "Ana Quispe",
+      category: "DIEZMOS",
       account: "Caja",
       amount: 200,
+      status: "Confirmado",
+      period: "202607",
+    }),
+    makeTransaction({
+      id: "ING-JULIO-SIN-DONANTE",
+      date: new Date("2026-07-30T05:00:00.000Z"),
+      description: "Aporte anónimo",
+      category: "Diezmo",
+      account: "Caja",
+      amount: 100,
+      status: "Confirmado",
+      period: "202607",
+    }),
+    makeTransaction({
+      id: "ING-JULIO-SIN-DESCRIPCION",
+      date: new Date("2026-07-29T05:00:00.000Z"),
+      description: null,
+      donorOrProvider: "Carlos Ríos",
+      category: "Diezmo",
+      account: "Caja",
+      amount: 75,
+      status: "Confirmado",
+      period: "202607",
+    }),
+    makeTransaction({
+      id: "OFR-JULIO-SIN-DESCRIPCION",
+      date: new Date("2026-07-26T05:00:00.000Z"),
+      description: null,
+      category: "ofrendas",
+      account: "Caja",
+      amount: 50,
       status: "Confirmado",
       period: "202607",
     }),
@@ -298,6 +330,40 @@ describe("explorador de movimientos", () => {
     );
   });
 
+  it("muestra el nombre directamente solo en los previews de diezmos con donante", async () => {
+    renderApp("/movimientos", createServices(explorerTransactions));
+
+    const mobileResults = await screen.findByRole("list", { name: "Movimientos encontrados" });
+    expect(within(mobileResults).getByText("DIEZMOS")).toBeInTheDocument();
+    expect(within(mobileResults).getByText("Ana Quispe")).toBeInTheDocument();
+    expect(screen.getAllByText("Ana Quispe")).toHaveLength(2);
+    const donorOnlyPreview = within(mobileResults).getByText("Carlos Ríos").closest("p");
+    if (!donorOnlyPreview) throw new Error("No se encontró el preview del donante.");
+    expect(donorOnlyPreview).toHaveAttribute("title", "Carlos Ríos");
+    expect(screen.queryByText("María Álvarez")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Donante:/)).not.toBeInTheDocument();
+  });
+
+  it("muestra la fecha de las ofrendas en una línea posterior a la categoría", async () => {
+    renderApp("/movimientos", createServices(explorerTransactions));
+
+    const mobileResults = await screen.findByRole("list", { name: "Movimientos encontrados" });
+    const offeringCard = within(mobileResults).getByText("Ofrenda de misión").closest("article");
+    if (!offeringCard) throw new Error("No se encontró la ofrenda.");
+    const categoryLine = within(offeringCard).getByText("Ofrendas").closest("p");
+    const dateLine = within(offeringCard).getByText("Martes 18/08").closest("p");
+    if (!categoryLine || !dateLine) throw new Error("No se encontró el preview de la ofrenda.");
+    expect(categoryLine.nextElementSibling).toBe(dateLine);
+
+    const offeringDateOnly = within(mobileResults)
+      .getByText("Domingo 26/07")
+      .closest(".transaction-preview");
+    if (!offeringDateOnly)
+      throw new Error("No se encontró la fecha de la ofrenda sin descripción.");
+    expect(offeringDateOnly).toHaveTextContent("Domingo 26/07");
+    expect(offeringDateOnly).not.toHaveTextContent("ofrendas");
+  });
+
   it("abre el detalle completo y devuelve el foco al activador al cerrar con Escape", async () => {
     const user = userEvent.setup();
     renderApp("/movimientos", createServices(explorerTransactions));
@@ -313,8 +379,9 @@ describe("explorador de movimientos", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Trazabilidad")).toBeInTheDocument();
     expect(within(dialog).getByText("Donante / Proveedor")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cerrar" })).toHaveFocus();
 
-    fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    await user.keyboard("{Escape}");
 
     await waitFor(() => {
       expect(dialog).not.toHaveAttribute("open");

@@ -1,9 +1,25 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { Transaction } from "../../domain/transaction";
-import { formatCompactDate, formatDate, formatMoney, formatPeriod } from "../formatters";
+import {
+  formatCompactDate,
+  formatDate,
+  formatMoney,
+  formatPeriod,
+  formatPreviewDate,
+} from "../formatters";
 
 const getTransactionConcept = (transaction: Transaction): string =>
   transaction.description ?? transaction.category;
+
+const normalizeCategory = (category: string): string => category.trim().toLocaleLowerCase("es-PE");
+
+const isTitheCategory = (category: string): boolean => {
+  const normalizedCategory = normalizeCategory(category);
+  return normalizedCategory === "diezmo" || normalizedCategory === "diezmos";
+};
+
+const isOfferingCategory = (category: string): boolean =>
+  normalizeCategory(category) === "ofrendas";
 
 const getTransactionTypeLabel = (transaction: Transaction): string =>
   transaction.type === "INGRESO" ? "Ingreso" : "Egreso";
@@ -37,6 +53,40 @@ function TransactionAmount({ transaction }: { transaction: Transaction }) {
   );
 }
 
+function TransactionPreview({ transaction }: { transaction: Transaction }) {
+  const concept = getTransactionConcept(transaction);
+  const category = concept === transaction.category ? null : transaction.category;
+  const donor = isTitheCategory(transaction.category)
+    ? transaction.donorOrProvider?.trim() || null
+    : null;
+  const offeringDate = isOfferingCategory(transaction.category)
+    ? formatPreviewDate(transaction.date)
+    : null;
+
+  if (!category && !donor && !offeringDate) return null;
+
+  const preview = [category, donor].filter(Boolean).join(" · ");
+
+  return (
+    <div className="transaction-preview">
+      {preview ? (
+        <p className="transaction-preview-line" title={preview}>
+          {category ? <span className="transaction-preview-category">{category}</span> : null}
+          {category && donor ? (
+            <span className="transaction-preview-separator">{" · "}</span>
+          ) : null}
+          {donor ? <span className="transaction-preview-donor">{donor}</span> : null}
+        </p>
+      ) : null}
+      {offeringDate ? (
+        <p className="transaction-preview-date" title={offeringDate}>
+          {offeringDate}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function TransactionResults({
   transactions,
   onViewDetails,
@@ -49,7 +99,6 @@ export function TransactionResults({
       <ul className="transaction-card-list xl:hidden" aria-label="Movimientos encontrados">
         {transactions.map((transaction) => {
           const concept = getTransactionConcept(transaction);
-          const showCategory = concept !== transaction.category;
           return (
             <li key={transaction.id}>
               <article className="transaction-card">
@@ -63,14 +112,7 @@ export function TransactionResults({
                   <p className="truncate text-sm font-semibold text-slate-100" title={concept}>
                     {concept}
                   </p>
-                  {showCategory ? (
-                    <p
-                      className="mt-1 truncate text-xs text-slate-500"
-                      title={transaction.category}
-                    >
-                      {transaction.category}
-                    </p>
-                  ) : null}
+                  <TransactionPreview transaction={transaction} />
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <TransactionAmount transaction={transaction} />
@@ -109,7 +151,6 @@ export function TransactionResults({
           <tbody>
             {transactions.map((transaction) => {
               const concept = getTransactionConcept(transaction);
-              const showCategory = concept !== transaction.category;
               return (
                 <tr key={transaction.id}>
                   <td className="whitespace-nowrap text-slate-300">
@@ -119,14 +160,7 @@ export function TransactionResults({
                     <p className="truncate font-medium text-slate-100" title={concept}>
                       {concept}
                     </p>
-                    {showCategory ? (
-                      <p
-                        className="mt-1 truncate text-xs text-slate-500"
-                        title={transaction.category}
-                      >
-                        {transaction.category}
-                      </p>
-                    ) : null}
+                    <TransactionPreview transaction={transaction} />
                   </td>
                   <td>
                     <TransactionTypeBadge transaction={transaction} />
@@ -228,6 +262,11 @@ export function TransactionDetailDialog({
   );
   const titleId = "transaction-detail-title";
 
+  const closeDialog = () => {
+    const dialog = dialogRef.current;
+    if (dialog?.open) dialog.close();
+  };
+
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -257,13 +296,17 @@ export function TransactionDetailDialog({
     };
   }, [onClose, returnFocusTo]);
 
-  const closeDialog = () => {
-    const dialog = dialogRef.current;
-    if (dialog?.open) dialog.close();
-  };
-
   return (
-    <dialog className="transaction-detail-dialog" ref={dialogRef} aria-labelledby={titleId}>
+    <dialog
+      className="transaction-detail-dialog"
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        closeDialog();
+      }}
+    >
       {transaction ? (
         <div className="transaction-detail-content">
           <header className="transaction-detail-header">
