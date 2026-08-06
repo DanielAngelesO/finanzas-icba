@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/auth-context";
+import { AppVersion } from "../components/app-version";
 import { ThemeSelector } from "../components/theme-selector";
 
 function GoogleIcon() {
@@ -26,9 +27,12 @@ function GoogleIcon() {
 }
 
 export function LoginPage() {
-  const { state, signIn } = useAuth();
+  const { state, signIn, retryPreparation } = useAuth();
   if (state.status === "authenticated") return <Navigate to="/" replace />;
-  const busy = state.status === "authorizing";
+  const restoring = state.status === "restoring";
+  const preparing = state.status === "preparing";
+  const authorizing = state.status === "authorizing";
+  const initializationFailed = state.status === "error" && state.source === "preparation";
   return (
     <main className="auth-page grid min-h-screen place-items-center px-4 text-slate-100">
       <div className="auth-theme-control">
@@ -66,18 +70,24 @@ export function LoginPage() {
           {/* Sign in button */}
           <button
             className="button-google"
-            disabled={busy}
+            disabled={restoring || preparing || authorizing}
             type="button"
-            onClick={() => void signIn()}
+            onClick={initializationFailed ? retryPreparation : signIn}
           >
-            {busy ? (
+            {restoring || preparing || authorizing ? (
               <>
                 <span
                   className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent"
                   aria-hidden="true"
                 />
-                Autorizando…
+                {restoring
+                  ? "Restaurando sesión…"
+                  : preparing
+                    ? "Preparando Google…"
+                    : "Autorizando…"}
               </>
+            ) : initializationFailed ? (
+              "Reintentar preparar Google"
             ) : (
               <>
                 <GoogleIcon />
@@ -91,6 +101,7 @@ export function LoginPage() {
             La lista de correos mejora la experiencia, pero el acceso real al archivo depende de los
             permisos de Google Sheets.
           </p>
+          <AppVersion className="text-center text-[11px] text-slate-600" />
         </div>
       </section>
     </main>

@@ -65,7 +65,8 @@ const authenticatedUser: AuthContextValue = {
     email: "liderazgo@icba.pe",
     name: "Liderazgo ICBA",
   },
-  signIn: async () => {},
+  signIn: () => {},
+  retryPreparation: () => {},
   signOut: () => {},
 };
 
@@ -110,6 +111,7 @@ describe("navegación principal", () => {
     renderApp("/ingresar");
 
     expect(await screen.findByRole("heading", { name: "Resumen financiero" })).toBeInTheDocument();
+    expect(screen.getByText(/^Versión v\d+\.\d+\.\d+ · /)).toBeInTheDocument();
   });
 
   it("actualiza el período del resumen y conserva el enlace a movimientos", async () => {

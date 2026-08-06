@@ -1,16 +1,19 @@
 import { createContext, useContext } from "react";
 
 export type AuthState =
-  | { status: "idle" }
+  | { status: "restoring" }
+  | { status: "preparing" }
+  | { status: "ready" }
   | { status: "authorizing" }
   | { status: "authenticated"; email: string; name: string | null }
   | { status: "unauthorized"; email: string }
   | { status: "expired" }
-  | { status: "error"; message: string };
+  | { status: "error"; source: "preparation" | "authorization"; message: string };
 
 export interface AuthContextValue {
   state: AuthState;
-  signIn(): Promise<void>;
+  signIn(): void;
+  retryPreparation(): void;
   signOut(): void;
 }
 

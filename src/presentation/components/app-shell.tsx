@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/auth-context";
+import { AppVersion } from "./app-version";
 import { ThemeSelector } from "./theme-selector";
 
 function HomeIcon() {
@@ -211,6 +212,7 @@ export function AppShell() {
           </p>
           <ThemeSelector />
         </div>
+        <AppVersion className="mt-3 text-center text-[11px] text-slate-600" />
       </div>
     </>
   );

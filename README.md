@@ -23,6 +23,13 @@ npm test
 npm run build
 ```
 
+## Versionado de publicación
+
+Antes de publicar, incremente la versión semántica con `npm run version:patch`,
+`npm run version:minor` o `npm run version:major`, y confirme los cambios de
+`package.json` y `package-lock.json`. La aplicación muestra la versión junto al
+commit del build en las pantallas de acceso y navegación.
+
 `npm run test:integration` queda reservado para una prueba real local y no se ejecuta por defecto.
 
 ## Google Cloud y Google Sheets
