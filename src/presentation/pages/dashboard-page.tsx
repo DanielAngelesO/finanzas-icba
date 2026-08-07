@@ -6,12 +6,18 @@ import type { ConnectionStatus } from "../../domain/diagnostics";
 import {
   BalanceTrendChart,
   ContributionTrendChart,
-  ExpenseCategoryChart,
   FinancialTrendChart,
+} from "../components/dashboard-annual-widgets";
+import {
+  ExpenseCategoryChart,
   IncomeCategoryChart,
-  RecentTransactionList,
   SalaryExpenseComparison,
-} from "../components/dashboard-widgets";
+} from "../components/dashboard-period-analysis-widgets";
+import {
+  PeriodBalanceTrendChart,
+  PeriodFinancialTrendChart,
+} from "../components/dashboard-period-trend-widgets";
+import { RecentTransactionList } from "../components/dashboard-recent-activity";
 import { StatusBadge } from "../components/status-badge";
 import { formatDate, formatMoney, formatPercent, formatPeriod } from "../formatters";
 
@@ -163,13 +169,17 @@ export function DashboardPage({ services }: { services: AppServices }) {
     );
   }
 
+  const selectedPeriodLabel = data.selectedPeriod
+    ? formatPeriod(data.selectedPeriod)
+    : "el período seleccionado";
+
   return (
     <div className="space-y-9 animate-fade-in-up lg:space-y-10">
       <header className="space-y-5 border-b border-slate-800/80 pb-7 lg:flex lg:items-end lg:justify-between lg:gap-8 lg:space-y-0">
         <div className="max-w-xl">
           <h2 className="page-title">Resumen financiero</h2>
           <p className="page-subtitle">
-            Lectura ejecutiva del período, su evolución anual y los movimientos registrados.
+            Lectura ejecutiva del período, su horizonte de doce meses y los movimientos registrados.
           </p>
         </div>
         <div
@@ -291,31 +301,33 @@ export function DashboardPage({ services }: { services: AppServices }) {
         </div>
       </section>
 
-      <section className="space-y-4" aria-labelledby="financial-overview-title">
+      <section className="space-y-4" aria-labelledby="period-behavior-title">
         <DashboardSectionHeader
-          eyebrow="Evolución anual"
-          title="Panorama financiero"
-          description="Después de los indicadores, compara el flujo mensual y cómo se ha construido el saldo acumulado."
-          titleId="financial-overview-title"
+          eyebrow="Período seleccionado"
+          title="Comportamiento del período"
+          description={
+            "Flujo diario de " +
+            selectedPeriodLabel +
+            " hasta " +
+            (data.dataCutoff ? formatDate(data.dataCutoff) : "la fecha de corte") +
+            "."
+          }
+          titleId="period-behavior-title"
         />
         <div className="space-y-6">
-          <FinancialTrendChart trend={data.trend} />
-          <BalanceTrendChart trend={data.trend} />
+          <PeriodBalanceTrendChart trend={data.periodDailyTrend} />
+          <PeriodFinancialTrendChart trend={data.periodDailyTrend} />
         </div>
       </section>
 
       <section className="space-y-4" aria-labelledby="income-summary-title">
         <DashboardSectionHeader
           eyebrow="Origen de fondos"
-          title="Análisis de ingresos"
-          description="Revisa primero la composición del período y luego el comportamiento anual de ofrendas y diezmos."
+          title="Ingresos del período"
+          description="Revisa la composición de los ingresos registrados en el período seleccionado."
           titleId="income-summary-title"
         />
-        <div className="space-y-6">
-          <IncomeCategoryChart categories={data.incomeCategories} />
-          <ContributionTrendChart kind="OFRENDAS" trend={data.contributionTrends.OFRENDAS} />
-          <ContributionTrendChart kind="DIEZMOS" trend={data.contributionTrends.DIEZMOS} />
-        </div>
+        <IncomeCategoryChart categories={data.incomeCategories} />
       </section>
 
       <section className="space-y-4" aria-labelledby="expense-summary-title">
@@ -336,6 +348,21 @@ export function DashboardPage({ services }: { services: AppServices }) {
             categories={data.expenseCategories}
             insights={data.expenseInsights}
           />
+        </div>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="financial-overview-title">
+        <DashboardSectionHeader
+          eyebrow="Perspectiva general"
+          title="Horizonte de 12 meses"
+          description="Después del período actual, revisa la evolución mensual y el comportamiento de los aportes."
+          titleId="financial-overview-title"
+        />
+        <div className="space-y-6">
+          <FinancialTrendChart trend={data.trend} />
+          <BalanceTrendChart trend={data.trend} />
+          <ContributionTrendChart kind="OFRENDAS" trend={data.contributionTrends.OFRENDAS} />
+          <ContributionTrendChart kind="DIEZMOS" trend={data.contributionTrends.DIEZMOS} />
         </div>
       </section>
 

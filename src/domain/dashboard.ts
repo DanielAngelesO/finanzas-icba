@@ -13,6 +13,14 @@ export interface DashboardTrendPoint extends DashboardPeriodSummary {
   cumulativeBalance: number;
 }
 
+export interface DashboardDailyTrendPoint {
+  date: string;
+  income: number;
+  expense: number;
+  netResult: number;
+  cumulativeNetResult: number;
+}
+
 export interface DashboardAccumulatedSummary {
   income: number;
   expense: number;
@@ -66,6 +74,7 @@ export interface DashboardOverview {
   selectedPeriod: string | null;
   summary: DashboardPeriodSummary | null;
   accumulated: DashboardAccumulatedSummary | null;
+  periodDailyTrend: DashboardDailyTrendPoint[];
   trend: DashboardTrendPoint[];
   incomeCategories: DashboardCategorySummary[];
   contributionTrends: DashboardContributionTrends;

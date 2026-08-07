@@ -4,6 +4,7 @@ import type {
   DashboardContributionKind,
   DashboardContributionTrendPoint,
   DashboardContributionTrends,
+  DashboardDailyTrendPoint,
   DashboardExpenseComposition,
   DashboardExpenseInsights,
   DashboardExpenseGroup,
@@ -228,6 +229,61 @@ const getDataCutoff = (transactions: Transaction[]): Date | null =>
     null,
   );
 
+const formatDateKey = (date: Date): string =>
+  String(date.getUTCFullYear()) +
+  "-" +
+  String(date.getUTCMonth() + 1).padStart(2, "0") +
+  "-" +
+  String(date.getUTCDate()).padStart(2, "0");
+
+const getPeriodStart = (period: string): Date =>
+  new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(4, 6)) - 1, 1));
+
+const getPeriodDailyTrend = (
+  selectedPeriod: string,
+  transactions: Transaction[],
+  dataCutoff: Date | null,
+): DashboardDailyTrendPoint[] => {
+  if (dataCutoff === null) return [];
+
+  const totalsByDate = new Map<string, { income: number; expense: number }>();
+  for (const transaction of transactions) {
+    const key = formatDateKey(transaction.date);
+    const current = totalsByDate.get(key) ?? { income: 0, expense: 0 };
+    totalsByDate.set(key, {
+      income: current.income + (transaction.type === "INGRESO" ? transaction.amount : 0),
+      expense: current.expense + (transaction.type === "EGRESO" ? transaction.amount : 0),
+    });
+  }
+
+  const start = getPeriodStart(selectedPeriod);
+  const cutoff = new Date(
+    Date.UTC(dataCutoff.getUTCFullYear(), dataCutoff.getUTCMonth(), dataCutoff.getUTCDate()),
+  );
+  const points: DashboardDailyTrendPoint[] = [];
+  let cumulativeNetResult = 0;
+
+  for (
+    let day = start;
+    day.getTime() <= cutoff.getTime();
+    day = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1))
+  ) {
+    const date = formatDateKey(day);
+    const totals = totalsByDate.get(date) ?? { income: 0, expense: 0 };
+    const netResult = totals.income - totals.expense;
+    cumulativeNetResult += netResult;
+    points.push({
+      date,
+      income: totals.income,
+      expense: totals.expense,
+      netResult,
+      cumulativeNetResult,
+    });
+  }
+
+  return points;
+};
+
 export class GetDashboardOverviewUseCase {
   public constructor(private readonly repository: TransactionRepository) {}
 
@@ -260,6 +316,7 @@ export class GetDashboardOverviewUseCase {
         selectedPeriod: null,
         summary: null,
         accumulated: null,
+        periodDailyTrend: [],
         trend: [],
         incomeCategories: [],
         contributionTrends: { OFRENDAS: [], DIEZMOS: [] },
@@ -278,6 +335,8 @@ export class GetDashboardOverviewUseCase {
     }
 
     const summary = createPeriodSummary(selectedPeriod, selectedTransactions);
+    const dataCutoff = getDataCutoff(selectedTransactions);
+    const periodDailyTrend = getPeriodDailyTrend(selectedPeriod, selectedTransactions, dataCutoff);
     const trendPeriods = getTrendPeriods(selectedPeriod);
     const firstTrendPeriod = trendPeriods[0];
     if (!firstTrendPeriod) {
@@ -323,6 +382,7 @@ export class GetDashboardOverviewUseCase {
       selectedPeriod,
       summary,
       accumulated,
+      periodDailyTrend,
       trend,
       incomeCategories: groupMainCategories(getCategorySummaries(selectedTransactions, "INGRESO")),
       contributionTrends: getContributionTrends(trendPeriods, transactionsByPeriod),
@@ -337,7 +397,7 @@ export class GetDashboardOverviewUseCase {
         validTransactionCount: inspection.validTransactionCount,
         invalidTransactionCount: inspection.invalidTransactionCount,
       },
-      dataCutoff: getDataCutoff(selectedTransactions),
+      dataCutoff,
       inspectedAt: inspection.inspectedAt,
     };
   }

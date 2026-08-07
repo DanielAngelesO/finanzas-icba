@@ -1,27 +1,12 @@
-Primero una seccion de Resumen de KPIs importantes.
-- Ingresos, egresos y saldo del periodo totales del periodo.
-- Tasa de ahorro del periodo y numero de transacciones.
-- Saldo acumulado. (Y una seccion que mediante alguna accion muestre los ingresos y egresos totales acumulados)
+El módulo Resumen prioriza el período seleccionado antes de mostrar el horizonte general y el detalle operativo.
 
-Grafico 1:
-Evolución financiera de Ingresos vs Egresos de los ultimos 6 meses.
+1. Indicadores clave del período: ingresos, egresos, saldo, tasa de ahorro, movimientos y saldo acumulado con sus totales desplegables.
+2. Comportamiento diario hasta la fecha de corte:
+   - barras de saldo neto diario y línea del acumulado iniciado en cero;
+   - dos líneas para ingresos y egresos diarios, con el egreso en trazo discontinuo.
+3. Ingresos por categoría del período.
+4. Análisis ejecutivo de egresos, separando Salarios y Honorarios de los demás rubros.
+5. Horizonte de doce meses: ingresos frente a egresos, saldo neto mensual frente a saldo acumulado histórico, ofrendas y diezmos.
+6. Actividad reciente del período seleccionado.
 
-Grafico 2:
-Evolución del Saldo Acumulado y Saldo neto mensual.
-
-Otra seccion para un resumen de ingresos:
-Grafico circular por categoria.
-Otro grafico para identificar el numero de ofrendas y diezmos durante el periodo. (Sugerir modelo)
-
-Y una secciòn para egresos (sugerir que debe ir un modelo ejecutivo)
-
-Mejora 1:
-Extiende estos graficos a un horizonte de un año:
-**Ingresos frente a egresos**
-**Saldo acumulado y resultado mensual**
-
-En la seccion de Ingresos, el grafico **Ofrendas y diezmos, reemplazalo por un grafico que se vea el coomportamiento de diezmo y de ofrenta en el horizonte de un año.**
-
-Estos graficos que vayan en una sola linea entera para mejor visualizacion.
-
-⬇
+Los gráficos diarios contienen cada fecha desde el primer día del mes hasta el último movimiento, incluidos los días sin actividad. En pantallas estrechas se desplazan dentro de su propia tarjeta para preservar la legibilidad de todos los días. Todas las visualizaciones incluyen una tabla equivalente para tecnologías de asistencia.

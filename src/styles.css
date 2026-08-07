@@ -1604,6 +1604,18 @@ html[data-theme="dark"] {
   color: var(--ui-text);
 }
 
+.chart-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+
+.chart-scroll:focus-visible {
+  border-radius: 0.75rem;
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
 .expense-breakdown-action:hover {
   border-color: var(--ui-accent-border);
   background: var(--ui-accent-soft);

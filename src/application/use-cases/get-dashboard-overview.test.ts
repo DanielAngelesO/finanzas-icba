@@ -132,6 +132,58 @@ describe("GetDashboardOverviewUseCase", () => {
     expect(overview.availablePeriods).toEqual(periods);
   });
 
+  it("genera una tendencia diaria continua hasta el corte y reinicia su acumulado en cero", async () => {
+    const overview = await new GetDashboardOverviewUseCase(
+      new InMemoryTransactionRepository([
+        transactionForPeriod("ING-01", "202608", "INGRESO", 100, "Ofrendas", 2),
+        transactionForPeriod("ING-02", "202608", "INGRESO", 50, "Diezmos", 2),
+        transactionForPeriod("EGR-01", "202608", "EGRESO", 60, "Servicios", 4),
+        transactionForPeriod("ING-03", "202608", "INGRESO", 30, "Ofrendas", 6),
+        transactionForPeriod("EGR-02", "202608", "EGRESO", 10, "Ayuda social", 6),
+      ]),
+    ).execute("202608");
+
+    expect(overview.periodDailyTrend).toEqual([
+      { date: "2026-08-01", income: 0, expense: 0, netResult: 0, cumulativeNetResult: 0 },
+      {
+        date: "2026-08-02",
+        income: 150,
+        expense: 0,
+        netResult: 150,
+        cumulativeNetResult: 150,
+      },
+      {
+        date: "2026-08-03",
+        income: 0,
+        expense: 0,
+        netResult: 0,
+        cumulativeNetResult: 150,
+      },
+      {
+        date: "2026-08-04",
+        income: 0,
+        expense: 60,
+        netResult: -60,
+        cumulativeNetResult: 90,
+      },
+      {
+        date: "2026-08-05",
+        income: 0,
+        expense: 0,
+        netResult: 0,
+        cumulativeNetResult: 90,
+      },
+      {
+        date: "2026-08-06",
+        income: 30,
+        expense: 10,
+        netResult: 20,
+        cumulativeNetResult: 110,
+      },
+    ]);
+    expect(overview.summary).toMatchObject({ income: 180, expense: 70, netResult: 110 });
+  });
+
   it("agrupa gastos no salariales en Otros y usa el período más reciente por defecto", async () => {
     const categories = [
       ["A", 600],
@@ -241,6 +293,15 @@ describe("GetDashboardOverviewUseCase", () => {
       netResult: -200,
       savingsRate: null,
     });
+    expect(overview.periodDailyTrend).toEqual([
+      {
+        date: "2026-08-01",
+        income: 0,
+        expense: 200,
+        netResult: -200,
+        cumulativeNetResult: -200,
+      },
+    ]);
   });
 
   it("devuelve un estado vacío cuando no existen transacciones válidas", async () => {
@@ -251,6 +312,7 @@ describe("GetDashboardOverviewUseCase", () => {
     expect(overview.selectedPeriod).toBeNull();
     expect(overview.summary).toBeNull();
     expect(overview.accumulated).toBeNull();
+    expect(overview.periodDailyTrend).toEqual([]);
     expect(overview.trend).toEqual([]);
     expect(overview.contributionTrends).toEqual({ OFRENDAS: [], DIEZMOS: [] });
     expect(overview.expenseComposition).toBeNull();

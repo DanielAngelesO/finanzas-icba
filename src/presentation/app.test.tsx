@@ -129,6 +129,11 @@ describe("navegación principal", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Hay 1 fila inválida que no se incluyen en los totales.",
     );
+    expect(
+      within(
+        screen.getByRole("table", { name: "Valores diarios de ingresos y egresos" }),
+      ).getAllByRole("row"),
+    ).toHaveLength(21);
 
     await user.selectOptions(periodSelect, "202607");
 
@@ -139,6 +144,11 @@ describe("navegación principal", () => {
         .closest("article");
       if (!selectedIncomeCard) throw new Error("No se encontró el indicador de ingresos.");
       expect(selectedIncomeCard).toHaveTextContent("700.00");
+      expect(
+        within(
+          screen.getByRole("table", { name: "Valores diarios de ingresos y egresos" }),
+        ).getAllByRole("row"),
+      ).toHaveLength(19);
     });
     expect(screen.getByRole("link", { name: "Ver todos" })).toHaveAttribute(
       "href",
@@ -181,6 +191,45 @@ describe("navegación principal", () => {
     ).toBeInTheDocument();
     expect(within(offeringsTable).getAllByRole("row")).toHaveLength(13);
     expect(within(tithesTable).getAllByRole("row")).toHaveLength(13);
+  });
+
+  it("prioriza el análisis diario antes del horizonte anual y conserva sus tablas accesibles", async () => {
+    renderApp("/");
+
+    await screen.findByRole("heading", { name: "Comportamiento del período" });
+
+    expect(
+      screen
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent)
+        .slice(-6),
+    ).toEqual([
+      "Indicadores clave",
+      "Comportamiento del período",
+      "Ingresos del período",
+      "Análisis ejecutivo de egresos",
+      "Horizonte de 12 meses",
+      "Actividad reciente",
+    ]);
+
+    const dailyBalanceTable = screen.getByRole("table", {
+      name: "Valores diarios de saldo neto y acumulado del período",
+    });
+    const dailyFinancialTable = screen.getByRole("table", {
+      name: "Valores diarios de ingresos y egresos",
+    });
+    expect(
+      within(dailyBalanceTable).getByRole("columnheader", { name: "Acumulado del período" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dailyFinancialTable).getByRole("columnheader", { name: "Ingresos" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dailyFinancialTable).getByRole("columnheader", { name: "Egresos" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Gráfico desplazable de ingresos y egresos diarios" }),
+    ).toHaveAttribute("tabindex", "0");
   });
 
   it("marca el destino activo y cierra el menú móvil al navegar", async () => {
