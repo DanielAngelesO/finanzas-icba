@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useMemo } from "react";
 import type { AppConfig } from "../config/google-sheets";
-import { createServices } from "../composition/services";
+import { createReviewServices, createServices, type AppServices } from "../composition/services";
+import { AuthContext, type AuthContextValue, useAuth } from "./auth/auth-context";
 import { AuthProvider } from "./auth/auth-provider";
-import { useAuth } from "./auth/auth-context";
 import { AppShell } from "./components/app-shell";
 import { ThemeSelector } from "./components/theme-selector";
 import { DashboardPage } from "./pages/dashboard-page";
@@ -49,7 +49,7 @@ function ProtectedContent({ children }: { children: React.ReactNode }) {
   return state.status === "authenticated" ? <>{children}</> : <Navigate to="/ingresar" replace />;
 }
 
-export function AppRoutes({ services }: { services: ReturnType<typeof createServices> }) {
+export function AppRoutes({ services }: { services: AppServices }) {
   return (
     <Routes>
       <Route path="/ingresar" element={<LoginPage />} />
@@ -95,10 +95,38 @@ function ConfiguredApp({ config }: { config: Extract<AppConfig, { kind: "configu
   );
 }
 
-export function App({ config }: { config: AppConfig }) {
-  return config.kind === "configured" ? (
-    <ConfiguredApp config={config} />
-  ) : (
-    <UnconfiguredPage errors={config.errors} />
+const reviewAuthValue: AuthContextValue = {
+  state: {
+    status: "authenticated",
+    email: "revision.local@finanzas-icba.test",
+    name: "Revisión local",
+  },
+  signIn: () => {},
+  retryPreparation: () => {},
+  signOut: () => {},
+  isReviewMode: true,
+};
+
+function ReviewApp() {
+  const services = useMemo(() => createReviewServices(), []);
+  const queryClient = useMemo(
+    () => new QueryClient({ defaultOptions: { queries: { retry: 0, staleTime: 30_000 } } }),
+    [],
   );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={reviewAuthValue}>
+        <BrowserRouter>
+          <AppRoutes services={services} />
+        </BrowserRouter>
+      </AuthContext.Provider>
+    </QueryClientProvider>
+  );
+}
+
+export function App({ config }: { config: AppConfig }) {
+  if (config.kind === "review") return <ReviewApp />;
+  if (config.kind === "configured") return <ConfiguredApp config={config} />;
+  return <UnconfiguredPage errors={config.errors} />;
 }

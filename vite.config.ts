@@ -42,14 +42,22 @@ const buildCommit = configuredCommit
     ? `${localCommit}${localChanges ? "-dirty" : ""}`
     : "local";
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  define: {
-    "import.meta.env.VITE_APP_VERSION": JSON.stringify(getPackageVersion()),
-    "import.meta.env.VITE_APP_COMMIT": JSON.stringify(buildCommit),
-  },
-  server: {
-    host: true,
-    port: 5173,
-  },
+export default defineConfig(({ command, mode }) => {
+  if (command === "build" && mode === "review") {
+    throw new Error(
+      "El modo de revisión local solo puede ejecutarse con Vite dev; no se permite generar un build.",
+    );
+  }
+
+  return {
+    plugins: [react(), tailwindcss()],
+    define: {
+      "import.meta.env.VITE_APP_VERSION": JSON.stringify(getPackageVersion()),
+      "import.meta.env.VITE_APP_COMMIT": JSON.stringify(buildCommit),
+    },
+    server: {
+      host: mode === "review" ? "127.0.0.1" : true,
+      port: 5173,
+    },
+  };
 });

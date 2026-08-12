@@ -52,7 +52,12 @@ export const transactionColumnMapping: TransactionColumnMapping = {
 };
 
 const optionalString = z.string().trim().optional();
+const runtimeEnvironmentSchema = z
+  .object({ MODE: optionalString, DEV: z.boolean().optional() })
+  .passthrough();
 const environmentSchema = z.object({
+  MODE: optionalString,
+  DEV: z.boolean().optional(),
   VITE_GOOGLE_CLIENT_ID: optionalString,
   VITE_GOOGLE_SPREADSHEET_ID: optionalString,
   VITE_GOOGLE_SHEET_NAME: optionalString,
@@ -67,6 +72,7 @@ const environmentSchema = z.object({
 });
 
 export type AppConfig =
+  | { kind: "review" }
   | { kind: "configured"; googleClientId: string; dataSource: GoogleSheetsDataSourceConfig }
   | { kind: "unconfigured"; errors: string[] };
 
@@ -79,6 +85,12 @@ const parsePositiveInteger = (value: string | undefined, fallback: number, label
 };
 
 export const loadAppConfig = (environment: unknown = import.meta.env): AppConfig => {
+  const runtimeEnvironment = runtimeEnvironmentSchema.safeParse(environment);
+  if (runtimeEnvironment.success) {
+    const { MODE, DEV } = runtimeEnvironment.data;
+    if (MODE === "review" && DEV === true) return { kind: "review" };
+  }
+
   const parsed = environmentSchema.safeParse(environment);
   if (!parsed.success) return { kind: "unconfigured", errors: ["Variables de entorno inválidas."] };
 

@@ -492,6 +492,18 @@
   color: #a7f3d0;
   background: linear-gradient(135deg, rgba(6, 95, 70, 0.15), rgba(6, 95, 70, 0.08));
 }
+@utility review-mode-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--ui-info-border);
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--ui-info-text);
+  background: var(--ui-info-surface);
+}
 
 /* ── Badges ── */
 @utility badge {

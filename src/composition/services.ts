@@ -6,6 +6,11 @@ import { GetBasicFinancialSummaryUseCase } from "../application/use-cases/get-ba
 import { TransactionQueries } from "../application/use-cases/transaction-queries";
 import { GoogleSheetsClient } from "../infrastructure/google-sheets/google-sheets-client";
 import { GoogleSheetsTransactionRepository } from "../infrastructure/google-sheets/google-sheets-transaction-repository";
+import { InMemoryTransactionRepository } from "../infrastructure/memory/in-memory-transaction-repository";
+import {
+  createReviewTransactions,
+  reviewDataQualityIssues,
+} from "../infrastructure/review/review-data";
 
 export class AccessTokenStore {
   private token: string | null = null;
@@ -26,6 +31,15 @@ export interface AppServices {
   expenses: GetExpenseAnalysisUseCase;
 }
 
+const createServicesFromRepository = (repository: InMemoryTransactionRepository): AppServices => ({
+  tokenStore: new AccessTokenStore(),
+  transactions: new TransactionQueries(repository),
+  dataSource: new DataSourceQueries(repository),
+  financialSummary: new GetBasicFinancialSummaryUseCase(repository),
+  dashboard: new GetDashboardOverviewUseCase(repository),
+  expenses: new GetExpenseAnalysisUseCase(repository),
+});
+
 export const createServices = (config: Extract<AppConfig, { kind: "configured" }>): AppServices => {
   const tokenStore = new AccessTokenStore();
   const client = new GoogleSheetsClient(config.dataSource, tokenStore.get);
@@ -39,3 +53,8 @@ export const createServices = (config: Extract<AppConfig, { kind: "configured" }
     expenses: new GetExpenseAnalysisUseCase(repository),
   };
 };
+
+export const createReviewServices = (): AppServices =>
+  createServicesFromRepository(
+    new InMemoryTransactionRepository(createReviewTransactions(), reviewDataQualityIssues),
+  );

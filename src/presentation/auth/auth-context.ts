@@ -15,6 +15,7 @@ export interface AuthContextValue {
   signIn(): void;
   retryPreparation(): void;
   signOut(): void;
+  isReviewMode?: boolean;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

@@ -23,6 +23,28 @@ npm test
 npm run build
 ```
 
+## Revisión local sin Google
+
+Para revisar una implementación sin iniciar sesión con Google, use:
+
+```bash
+npm run dev:review
+```
+
+Este comando levanta la aplicación únicamente en `127.0.0.1:5173`, inicia una identidad local
+autenticada y carga datos sintéticos versionados de septiembre de 2025 a agosto de 2026. El aviso
+visible **Modo revisión local** confirma que Google Sheets no se consulta. La fuente de datos aparece
+como **Memoria** y contiene suficientes ingresos, egresos, filtros, tendencias, paginación y señales
+de revisión para recorrer las pantallas.
+
+El modo revisión solo está habilitado durante `vite dev`; no se puede generar ni desplegar con
+`vite build --mode review`. Para validar la integración real de OAuth y Google Sheets, continúe
+usando el flujo normal con `npm run dev` y las variables de `.env.local`.
+
+Rutina recomendada después de cada cambio: ejecute `npm run dev:review`, revise Resumen,
+Movimientos, Gastos, Calidad de datos y Fuente de datos en escritorio y móvil, y cierre con las
+comprobaciones automatizadas del proyecto.
+
 ## Versionado de publicación
 
 Antes de publicar, incremente la versión semántica con `npm run version:patch`,

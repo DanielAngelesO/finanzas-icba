@@ -123,7 +123,7 @@ function getInitials(email: string, name: string | null): string {
 }
 
 export function AppShell() {
-  const { state, signOut } = useAuth();
+  const { state, signOut, isReviewMode = false } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(getInitialDesktopState);
 
@@ -198,14 +198,16 @@ export function AppShell() {
             {name ? <p className="truncate text-[11px] text-slate-500">{email}</p> : null}
           </div>
         </div>
-        <button
-          className="button-secondary button-icon mt-3 w-full justify-center text-xs"
-          type="button"
-          onClick={signOut}
-        >
-          <LogoutIcon />
-          Cerrar sesión
-        </button>
+        {isReviewMode ? null : (
+          <button
+            className="button-secondary button-icon mt-3 w-full justify-center text-xs"
+            type="button"
+            onClick={signOut}
+          >
+            <LogoutIcon />
+            Cerrar sesión
+          </button>
+        )}
         <div className="mt-3 border-t border-slate-700/70 pt-3">
           <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
             Apariencia
@@ -265,6 +267,17 @@ export function AppShell() {
 
       <main className="min-h-screen pt-14 lg:ml-64 lg:pt-0">
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+          {isReviewMode ? (
+            <div
+              className="review-mode-banner mb-6"
+              data-testid="review-mode-banner"
+              role="status"
+              aria-live="polite"
+            >
+              <span aria-hidden="true">ⓘ</span>
+              <span>Modo revisión local · datos sintéticos · Google Sheets no se consulta</span>
+            </div>
+          ) : null}
           <Outlet />
         </div>
       </main>
