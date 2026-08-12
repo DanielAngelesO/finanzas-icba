@@ -1,25 +1,36 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { AppServices } from "../../composition/services";
+import type { DashboardIncomeScope } from "../../domain/dashboard";
 import type { ConnectionStatus } from "../../domain/diagnostics";
 import {
-  BalanceTrendChart,
-  ContributionTrendChart,
+  DashboardAnalysisTabs,
+  type DashboardAnalysisTab,
+} from "../components/dashboard-analysis-tabs";
+import {
   FinancialTrendChart,
+  IncomeGroupCompositionTrendChart,
 } from "../components/dashboard-annual-widgets";
+import { IncomeScopeSelector } from "../components/dashboard-income-scope-selector";
+import {
+  ExpenseSummaryCard,
+  FinancialScenarioCard,
+  IncomeSummaryCards,
+} from "../components/dashboard-kpi-widgets";
 import {
   ExpenseCategoryChart,
   IncomeCategoryChart,
   SalaryExpenseComparison,
 } from "../components/dashboard-period-analysis-widgets";
 import {
-  PeriodBalanceTrendChart,
   PeriodFinancialTrendChart,
+  PeriodIncomeBehaviorChart,
 } from "../components/dashboard-period-trend-widgets";
 import { RecentTransactionList } from "../components/dashboard-recent-activity";
 import { StatusBadge } from "../components/status-badge";
-import { formatDate, formatMoney, formatPercent, formatPeriod } from "../formatters";
+import { getIncomeScopeLabel } from "../dashboard-income-presentation";
+import { formatDate, formatPeriod } from "../formatters";
 
 const getConnectionStatus = (
   isPending: boolean,
@@ -30,6 +41,12 @@ const getConnectionStatus = (
   if (status) return status;
   return isError ? "ERROR" : "UNCONFIGURED";
 };
+
+const readIncomeScope = (value: string | null): DashboardIncomeScope =>
+  value === "all" ? "ALL" : "CONTRIBUTIONS";
+
+const toIncomeScopeParam = (scope: DashboardIncomeScope): string =>
+  scope === "ALL" ? "all" : "contributions";
 
 function DashboardSectionHeader({
   eyebrow,
@@ -55,31 +72,11 @@ function DashboardSectionHeader({
   );
 }
 
-function DashboardMetricCard({
-  label,
-  value,
-  accent,
-  animationDelay,
-  children,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-  animationDelay: string;
-  children?: ReactNode;
-}) {
-  return (
-    <article className={"stat-card " + accent} style={{ animationDelay }}>
-      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-3 text-xl font-bold tabular-nums text-slate-100">{value}</p>
-      {children}
-    </article>
-  );
-}
-
 export function DashboardPage({ services }: { services: AppServices }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState<DashboardAnalysisTab>("CURRENT");
   const requestedPeriod = searchParams.get("period") ?? undefined;
+  const incomeScope = readIncomeScope(searchParams.get("income"));
   const overview = useQuery({
     queryKey: ["dashboard-overview", requestedPeriod],
     queryFn: () => services.dashboard.execute(requestedPeriod),
@@ -102,6 +99,12 @@ export function DashboardPage({ services }: { services: AppServices }) {
   const updatePeriod = (period: string) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("period", period);
+    setSearchParams(nextParams);
+  };
+
+  const updateIncomeScope = (scope: DashboardIncomeScope) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("income", toIncomeScopeParam(scope));
     setSearchParams(nextParams);
   };
 
@@ -144,7 +147,14 @@ export function DashboardPage({ services }: { services: AppServices }) {
     ? "/gastos?from=" + data.selectedPeriod + "&to=" + data.selectedPeriod
     : "/gastos";
 
-  if (!data.summary || !data.accumulated || !data.expenseComposition || !data.expenseInsights) {
+  if (
+    !data.summary ||
+    !data.accumulated ||
+    !data.comparison ||
+    !data.incomeBreakdown ||
+    !data.expenseComposition ||
+    !data.expenseInsights
+  ) {
     return (
       <div className="space-y-8 animate-fade-in-up">
         <section className="flex flex-wrap items-start justify-between gap-4">
@@ -172,6 +182,38 @@ export function DashboardPage({ services }: { services: AppServices }) {
   const selectedPeriodLabel = data.selectedPeriod
     ? formatPeriod(data.selectedPeriod)
     : "el período seleccionado";
+  const comparisonLabel =
+    data.comparison.window.kind === "THROUGH_DAY"
+      ? "Al corte del " +
+        (data.dataCutoff ? formatDate(data.dataCutoff) : "período") +
+        " vs al día " +
+        data.comparison.window.throughDay +
+        " de " +
+        formatPeriod(data.comparison.window.previousPeriod)
+      : selectedPeriodLabel +
+        " completo vs " +
+        formatPeriod(data.comparison.window.previousPeriod) +
+        " completo";
+  const periodAnalysis = (
+    <div className="space-y-6">
+      <PeriodFinancialTrendChart scope={incomeScope} trend={data.periodDailyTrend} />
+      <details className="dashboard-analysis-details">
+        <summary>Ver ritmo acumulado por grupo</summary>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Observa cuándo se registran diezmos, ofrendas y otros ingresos a lo largo del período.
+        </p>
+        <div className="mt-5">
+          <PeriodIncomeBehaviorChart scope={incomeScope} trend={data.periodIncomeBehavior} />
+        </div>
+      </details>
+    </div>
+  );
+  const annualAnalysis = (
+    <div className="space-y-6">
+      <IncomeGroupCompositionTrendChart trend={data.trend} />
+      <FinancialTrendChart scope={incomeScope} trend={data.trend} />
+    </div>
+  );
 
   return (
     <div className="space-y-9 animate-fade-in-up lg:space-y-10">
@@ -179,46 +221,55 @@ export function DashboardPage({ services }: { services: AppServices }) {
         <div className="max-w-xl">
           <h2 className="page-title">Resumen financiero</h2>
           <p className="page-subtitle">
-            Lectura ejecutiva del período, su horizonte de doce meses y los movimientos registrados.
+            Diferencia los aportes, otros ingresos y el resultado contable del período.
           </p>
         </div>
-        <div
-          className="grid w-full gap-4 rounded-2xl border border-slate-700/70 bg-slate-900/45 p-4 sm:grid-cols-2 lg:w-auto lg:min-w-[34rem] lg:grid-cols-[minmax(12rem,1fr)_minmax(9rem,auto)_auto] lg:items-end"
-          aria-busy={overview.isPlaceholderData}
-          aria-label="Contexto del análisis"
-        >
-          <label className="field-label">
-            Período
-            <select
-              className="field"
-              value={selectedPeriod}
-              onChange={(event) => updatePeriod(event.target.value)}
-            >
-              {data.availablePeriods.map((period) => (
-                <option key={period} value={period}>
-                  {formatPeriod(period)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="text-sm text-slate-400">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Fecha de corte
-            </p>
-            <p className="mt-2 font-medium text-slate-200">
-              {data.dataCutoff ? formatDate(data.dataCutoff) : "Sin movimientos"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1 lg:justify-end">
-            <StatusBadge status={connectionStatus} />
-            {overview.isPlaceholderData ? (
-              <span className="text-xs text-slate-400" aria-live="polite">
-                Actualizando…
-              </span>
-            ) : null}
-          </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={connectionStatus} />
+          {overview.isPlaceholderData ? (
+            <span className="text-xs text-slate-400" aria-live="polite">
+              Actualizando…
+            </span>
+          ) : null}
         </div>
       </header>
+
+      <section
+        className="dashboard-context-bar"
+        aria-busy={overview.isPlaceholderData}
+        aria-label="Contexto del análisis"
+      >
+        <label className="field-label min-w-0">
+          Período
+          <select
+            className="field"
+            value={selectedPeriod}
+            onChange={(event) => updatePeriod(event.target.value)}
+          >
+            {data.availablePeriods.map((period) => (
+              <option key={period} value={period}>
+                {formatPeriod(period)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="min-w-0">
+          <p className="field-label">Estadísticas</p>
+          <IncomeScopeSelector
+            label="Alcance global de ingresos"
+            onChange={updateIncomeScope}
+            scope={incomeScope}
+          />
+        </div>
+        <div className="dashboard-context-detail">
+          <p>Fecha de corte</p>
+          <strong>{data.dataCutoff ? formatDate(data.dataCutoff) : "Sin movimientos"}</strong>
+        </div>
+        <div className="dashboard-context-detail">
+          <p>Comparación</p>
+          <strong>{comparisonLabel}</strong>
+        </div>
+      </section>
 
       {data.dataQuality.invalidTransactionCount > 0 ? (
         <section className="alert-warning" role="status">
@@ -231,103 +282,83 @@ export function DashboardPage({ services }: { services: AppServices }) {
         </section>
       ) : null}
 
-      <section className="space-y-4" aria-labelledby="key-metrics-title">
+      <section className="space-y-4" aria-labelledby="income-overview-title">
         <DashboardSectionHeader
           eyebrow="Vista ejecutiva"
-          title="Indicadores clave"
-          description="Primero, los resultados del período y la posición acumulada hasta la fecha de corte."
-          titleId="key-metrics-title"
+          title="Ingresos del período"
+          description="Los tres montos se mantienen visibles; el alcance seleccionado solo cambia el análisis."
+          titleId="income-overview-title"
         />
-        <div
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-          aria-label="Indicadores del período"
-        >
-          <DashboardMetricCard
-            label="Ingresos"
-            value={formatMoney(data.summary.income)}
-            accent="stat-card-emerald"
-            animationDelay="0ms"
+        <IncomeSummaryCards
+          breakdown={data.incomeBreakdown}
+          comparison={data.comparison}
+          previousPeriod={data.comparison.window.previousPeriod}
+          scope={incomeScope}
+          summary={data.summary}
+        />
+      </section>
+
+      <section className="space-y-4" aria-labelledby="financial-result-title">
+        <DashboardSectionHeader
+          eyebrow="Resultado financiero"
+          title="Egresos, resultado y posición acumulada"
+          description="Cada escenario conserva todos los egresos; el total con otros ingresos es el saldo contable."
+          titleId="financial-result-title"
+        />
+        <div className="grid gap-4 xl:grid-cols-3" aria-label="Indicadores financieros del período">
+          <ExpenseSummaryCard
+            comparison={data.comparison.expense}
+            expense={data.summary.expense}
+            previousPeriod={data.comparison.window.previousPeriod}
           />
-          <DashboardMetricCard
-            label="Egresos"
-            value={formatMoney(data.summary.expense)}
-            accent="stat-card-rose"
-            animationDelay="80ms"
+          <FinancialScenarioCard
+            accumulated={data.accumulated}
+            comparison={data.comparison}
+            previousPeriod={data.comparison.window.previousPeriod}
+            scope="CONTRIBUTIONS"
+            selected={incomeScope === "CONTRIBUTIONS"}
+            summary={data.summary}
           />
-          <DashboardMetricCard
-            label="Saldo del período"
-            value={formatMoney(data.summary.netResult)}
-            accent="stat-card-indigo"
-            animationDelay="160ms"
-          />
-          <DashboardMetricCard
-            label="Saldo acumulado"
-            value={formatMoney(data.accumulated.balance)}
-            accent="stat-card-emerald"
-            animationDelay="240ms"
-          >
-            <details className="mt-3 text-xs text-slate-400">
-              <summary className="cursor-pointer font-medium text-emerald-300 hover:text-emerald-200">
-                Ver acumulados
-              </summary>
-              <dl className="mt-2 space-y-1 border-t border-slate-700/70 pt-2 tabular-nums">
-                <div className="flex justify-between gap-3">
-                  <dt>Ingresos</dt>
-                  <dd className="text-slate-200">{formatMoney(data.accumulated.income)}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt>Egresos</dt>
-                  <dd className="text-slate-200">{formatMoney(data.accumulated.expense)}</dd>
-                </div>
-              </dl>
-            </details>
-          </DashboardMetricCard>
-          <DashboardMetricCard
-            label="Tasa de ahorro"
-            value={
-              data.summary.savingsRate === null
-                ? "No aplica"
-                : formatPercent(data.summary.savingsRate)
-            }
-            accent="stat-card-sky"
-            animationDelay="320ms"
-          />
-          <DashboardMetricCard
-            label="Movimientos"
-            value={data.summary.transactionCount.toLocaleString("es-PE")}
-            accent="stat-card-sky"
-            animationDelay="400ms"
+          <FinancialScenarioCard
+            accumulated={data.accumulated}
+            comparison={data.comparison}
+            previousPeriod={data.comparison.window.previousPeriod}
+            scope="ALL"
+            selected={incomeScope === "ALL"}
+            summary={data.summary}
           />
         </div>
       </section>
 
-      <section className="space-y-4" aria-labelledby="period-behavior-title">
+      <section className="space-y-4" aria-labelledby="analysis-title">
         <DashboardSectionHeader
-          eyebrow="Período seleccionado"
-          title="Comportamiento del período"
+          eyebrow="Análisis"
+          title="Evolución financiera"
           description={
-            "Flujo diario de " +
-            selectedPeriodLabel +
-            " hasta " +
-            (data.dataCutoff ? formatDate(data.dataCutoff) : "la fecha de corte") +
-            "."
+            "Alcance activo: " +
+            getIncomeScopeLabel(incomeScope) +
+            ". Los tres montos de ingresos no cambian."
           }
-          titleId="period-behavior-title"
+          titleId="analysis-title"
         />
-        <div className="space-y-6">
-          <PeriodBalanceTrendChart trend={data.periodDailyTrend} />
-          <PeriodFinancialTrendChart trend={data.periodDailyTrend} />
-        </div>
+        <DashboardAnalysisTabs
+          activeTab={activeAnalysisTab}
+          annualPanel={annualAnalysis}
+          currentPanel={periodAnalysis}
+          onChange={setActiveAnalysisTab}
+        />
       </section>
 
       <section className="space-y-4" aria-labelledby="income-summary-title">
         <DashboardSectionHeader
           eyebrow="Origen de fondos"
-          title="Ingresos del período"
-          description="Revisa la composición de los ingresos registrados en el período seleccionado."
+          title="Categorías de ingreso"
+          description={
+            "Composición de " + getIncomeScopeLabel(incomeScope).toLocaleLowerCase("es-PE") + "."
+          }
           titleId="income-summary-title"
         />
-        <IncomeCategoryChart categories={data.incomeCategories} />
+        <IncomeCategoryChart categories={data.incomeCategories[incomeScope]} />
       </section>
 
       <section className="space-y-4" aria-labelledby="expense-summary-title">
@@ -348,21 +379,6 @@ export function DashboardPage({ services }: { services: AppServices }) {
             categories={data.expenseCategories}
             insights={data.expenseInsights}
           />
-        </div>
-      </section>
-
-      <section className="space-y-4" aria-labelledby="financial-overview-title">
-        <DashboardSectionHeader
-          eyebrow="Perspectiva general"
-          title="Horizonte de 12 meses"
-          description="Después del período actual, revisa la evolución mensual y el comportamiento de los aportes."
-          titleId="financial-overview-title"
-        />
-        <div className="space-y-6">
-          <FinancialTrendChart trend={data.trend} />
-          <BalanceTrendChart trend={data.trend} />
-          <ContributionTrendChart kind="OFRENDAS" trend={data.contributionTrends.OFRENDAS} />
-          <ContributionTrendChart kind="DIEZMOS" trend={data.contributionTrends.DIEZMOS} />
         </div>
       </section>
 

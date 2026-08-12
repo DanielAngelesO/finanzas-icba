@@ -2,29 +2,61 @@ import type { Transaction } from "./transaction";
 
 export interface DashboardPeriodSummary {
   period: string;
-  income: number;
+  income: DashboardIncomeScopeValues;
   expense: number;
-  netResult: number;
-  savingsRate: number | null;
+  netResult: DashboardIncomeScopeValues;
+  savingsRate: DashboardIncomeScopeNullableValues;
   transactionCount: number;
 }
 
-export interface DashboardTrendPoint extends DashboardPeriodSummary {
-  cumulativeBalance: number;
+export type DashboardIncomeGroup = "DIEZMOS" | "OFRENDAS" | "OTROS";
+
+export type DashboardIncomeScope = "CONTRIBUTIONS" | "ALL";
+
+export type DashboardIncomeScopeValues = Record<DashboardIncomeScope, number>;
+
+export type DashboardIncomeScopeNullableValues = Record<DashboardIncomeScope, number | null>;
+
+export interface DashboardIncomeGroupSummary {
+  amount: number;
+  transactionCount: number;
+  share: number;
+}
+
+export type DashboardIncomeBreakdown = Record<DashboardIncomeGroup, DashboardIncomeGroupSummary>;
+
+export interface DashboardIncomeGroupPeriodSummary {
+  amount: number;
+  transactionCount: number;
+}
+
+export interface DashboardTrendPoint {
+  period: string;
+  income: DashboardIncomeScopeValues;
+  incomeByGroup: Record<DashboardIncomeGroup, DashboardIncomeGroupPeriodSummary>;
+  expense: number;
+  netResult: DashboardIncomeScopeValues;
+  cumulativeBalance: DashboardIncomeScopeValues;
 }
 
 export interface DashboardDailyTrendPoint {
   date: string;
-  income: number;
+  income: DashboardIncomeScopeValues;
+  incomeByGroup: Record<DashboardIncomeGroup, number>;
   expense: number;
-  netResult: number;
-  cumulativeNetResult: number;
+  netResult: DashboardIncomeScopeValues;
+  cumulativeNetResult: DashboardIncomeScopeValues;
+}
+
+export interface DashboardIncomeBehaviorPoint {
+  date: string;
+  cumulativeShare: Record<DashboardIncomeGroup, number | null>;
 }
 
 export interface DashboardAccumulatedSummary {
-  income: number;
+  income: DashboardIncomeScopeValues;
   expense: number;
-  balance: number;
+  balance: DashboardIncomeScopeValues;
 }
 
 export interface DashboardCategorySummary {
@@ -34,18 +66,35 @@ export interface DashboardCategorySummary {
   share: number;
 }
 
-export type DashboardContributionKind = "OFRENDAS" | "DIEZMOS";
+export type DashboardComparisonDirection = "INCREASED" | "DECREASED" | "UNCHANGED";
 
-export interface DashboardContributionTrendPoint {
-  period: string;
-  amount: number;
-  transactionCount: number;
+export interface DashboardMetricComparison {
+  previousValue: number;
+  delta: number;
+  rate: number | null;
+  direction: DashboardComparisonDirection;
 }
 
-export type DashboardContributionTrends = Record<
-  DashboardContributionKind,
-  DashboardContributionTrendPoint[]
->;
+export interface DashboardRateComparison {
+  currentValue: number | null;
+  previousValue: number | null;
+  delta: number | null;
+  direction: DashboardComparisonDirection | null;
+}
+
+export type DashboardComparisonWindow =
+  | { kind: "FULL_MONTH"; previousPeriod: string }
+  | { kind: "THROUGH_DAY"; previousPeriod: string; throughDay: number };
+
+export interface DashboardPeriodComparison {
+  window: DashboardComparisonWindow;
+  income: Record<DashboardIncomeScope, DashboardMetricComparison>;
+  incomeByGroup: Record<DashboardIncomeGroup, DashboardMetricComparison>;
+  expense: DashboardMetricComparison;
+  netResult: Record<DashboardIncomeScope, DashboardMetricComparison>;
+  accumulatedBalance: Record<DashboardIncomeScope, DashboardMetricComparison>;
+  savingsRate: Record<DashboardIncomeScope, DashboardRateComparison>;
+}
 
 export interface DashboardExpenseGroup {
   amount: number;
@@ -63,6 +112,8 @@ export interface DashboardExpenseInsights {
   topThreeShare: number | null;
 }
 
+export type DashboardIncomeCategories = Record<DashboardIncomeScope, DashboardCategorySummary[]>;
+
 export interface DashboardDataQuality {
   totalDataRowCount: number;
   validTransactionCount: number;
@@ -74,10 +125,12 @@ export interface DashboardOverview {
   selectedPeriod: string | null;
   summary: DashboardPeriodSummary | null;
   accumulated: DashboardAccumulatedSummary | null;
+  comparison: DashboardPeriodComparison | null;
+  incomeBreakdown: DashboardIncomeBreakdown | null;
   periodDailyTrend: DashboardDailyTrendPoint[];
+  periodIncomeBehavior: DashboardIncomeBehaviorPoint[];
   trend: DashboardTrendPoint[];
-  incomeCategories: DashboardCategorySummary[];
-  contributionTrends: DashboardContributionTrends;
+  incomeCategories: DashboardIncomeCategories;
   expenseComposition: DashboardExpenseComposition | null;
   expenseCategories: DashboardCategorySummary[];
   expenseInsights: DashboardExpenseInsights | null;

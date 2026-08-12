@@ -1,17 +1,26 @@
 import type {
   DashboardAccumulatedSummary,
   DashboardCategorySummary,
-  DashboardContributionKind,
-  DashboardContributionTrendPoint,
-  DashboardContributionTrends,
+  DashboardComparisonWindow,
   DashboardDailyTrendPoint,
   DashboardExpenseComposition,
-  DashboardExpenseInsights,
   DashboardExpenseGroup,
+  DashboardExpenseInsights,
+  DashboardIncomeBehaviorPoint,
+  DashboardIncomeBreakdown,
+  DashboardIncomeCategories,
+  DashboardIncomeGroup,
+  DashboardIncomeGroupPeriodSummary,
+  DashboardIncomeScopeNullableValues,
+  DashboardIncomeScopeValues,
+  DashboardMetricComparison,
   DashboardOverview,
+  DashboardPeriodComparison,
   DashboardPeriodSummary,
+  DashboardRateComparison,
   DashboardTrendPoint,
 } from "../../domain/dashboard";
+import { getIncomeGroup, normalizeCategory } from "../../domain/income-groups";
 import type { Transaction } from "../../domain/transaction";
 import type { TransactionRepository } from "../ports/transaction-repository";
 
@@ -21,35 +30,99 @@ const maximumCategories = 5;
 const maximumRecentTransactions = 5;
 const salaryAndFeesCategory = "salarios y honorarios";
 
-const contributionAliases = {
-  OFRENDAS: new Set(["ofrenda", "ofrendas"]),
-  DIEZMOS: new Set(["diezmo", "diezmos"]),
-} as const;
-
 const sortTransactionsByNewestFirst = (left: Transaction, right: Transaction): number =>
   right.date.getTime() - left.date.getTime() || right.id.localeCompare(left.id);
 
-const normalizeCategory = (value: string): string =>
-  value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/&/g, " y ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleLowerCase("es-PE");
+const createIncomeScopeValues = (contributions = 0, all = 0): DashboardIncomeScopeValues => ({
+  CONTRIBUTIONS: contributions,
+  ALL: all,
+});
 
-const getContributionKind = (transaction: Transaction): DashboardContributionKind | null => {
-  if (transaction.type !== "INGRESO") return null;
-  const values = [transaction.category, transaction.subcategory].filter(
-    (value): value is string => value !== null,
-  );
-  const normalizedValues = values.map(normalizeCategory);
-  if (normalizedValues.some((value) => contributionAliases.OFRENDAS.has(value))) {
-    return "OFRENDAS";
+const createIncomeScopeNullableValues = (
+  contributions: number | null = null,
+  all: number | null = null,
+): DashboardIncomeScopeNullableValues => ({
+  CONTRIBUTIONS: contributions,
+  ALL: all,
+});
+
+const createIncomeGroupAmounts = (): Record<DashboardIncomeGroup, number> => ({
+  DIEZMOS: 0,
+  OFRENDAS: 0,
+  OTROS: 0,
+});
+
+const createIncomeGroupCounts = (): Record<DashboardIncomeGroup, number> => ({
+  DIEZMOS: 0,
+  OFRENDAS: 0,
+  OTROS: 0,
+});
+
+const getContributionIncome = (incomeByGroup: Record<DashboardIncomeGroup, number>): number =>
+  incomeByGroup.DIEZMOS + incomeByGroup.OFRENDAS;
+
+const getAllIncome = (incomeByGroup: Record<DashboardIncomeGroup, number>): number =>
+  getContributionIncome(incomeByGroup) + incomeByGroup.OTROS;
+
+interface IncomeGroupTotals {
+  amounts: Record<DashboardIncomeGroup, number>;
+  transactionCounts: Record<DashboardIncomeGroup, number>;
+}
+
+const getIncomeGroupTotals = (transactions: Transaction[]): IncomeGroupTotals => {
+  const amounts = createIncomeGroupAmounts();
+  const transactionCounts = createIncomeGroupCounts();
+
+  for (const transaction of transactions) {
+    const incomeGroup = getIncomeGroup(transaction);
+    if (!incomeGroup) continue;
+    amounts[incomeGroup] += transaction.amount;
+    transactionCounts[incomeGroup] += 1;
   }
-  return normalizedValues.some((value) => contributionAliases.DIEZMOS.has(value))
-    ? "DIEZMOS"
-    : null;
+
+  return { amounts, transactionCounts };
+};
+
+const createSavingsRates = (
+  income: DashboardIncomeScopeValues,
+  netResult: DashboardIncomeScopeValues,
+): DashboardIncomeScopeNullableValues =>
+  createIncomeScopeNullableValues(
+    income.CONTRIBUTIONS === 0 ? null : netResult.CONTRIBUTIONS / income.CONTRIBUTIONS,
+    income.ALL === 0 ? null : netResult.ALL / income.ALL,
+  );
+
+interface FinancialValues {
+  income: DashboardIncomeScopeValues;
+  incomeByGroup: Record<DashboardIncomeGroup, number>;
+  incomeTransactionCountByGroup: Record<DashboardIncomeGroup, number>;
+  expense: number;
+  netResult: DashboardIncomeScopeValues;
+  savingsRate: DashboardIncomeScopeNullableValues;
+}
+
+const getFinancialValues = (transactions: Transaction[]): FinancialValues => {
+  const incomeGroupTotals = getIncomeGroupTotals(transactions);
+  let expense = 0;
+
+  for (const transaction of transactions) {
+    if (transaction.type === "EGRESO") expense += transaction.amount;
+  }
+
+  const income = createIncomeScopeValues(
+    getContributionIncome(incomeGroupTotals.amounts),
+    getAllIncome(incomeGroupTotals.amounts),
+  );
+  const netResult = createIncomeScopeValues(income.CONTRIBUTIONS - expense, income.ALL - expense);
+
+  return {
+    income,
+    incomeByGroup: incomeGroupTotals.amounts,
+    incomeTransactionCountByGroup: incomeGroupTotals.transactionCounts,
+    expense,
+    netResult,
+    savingsRate: createSavingsRates(income, netResult),
+  };
 };
 
 const isSalaryAndFeesExpense = (transaction: Transaction): boolean =>
@@ -60,20 +133,38 @@ const createPeriodSummary = (
   period: string,
   transactions: Transaction[],
 ): DashboardPeriodSummary => {
-  const income = transactions
-    .filter((transaction) => transaction.type === "INGRESO")
-    .reduce((total, transaction) => total + transaction.amount, 0);
-  const expense = transactions
-    .filter((transaction) => transaction.type === "EGRESO")
-    .reduce((total, transaction) => total + transaction.amount, 0);
+  const financialValues = getFinancialValues(transactions);
 
   return {
     period,
-    income,
-    expense,
-    netResult: income - expense,
-    savingsRate: income === 0 ? null : (income - expense) / income,
+    income: financialValues.income,
+    expense: financialValues.expense,
+    netResult: financialValues.netResult,
+    savingsRate: financialValues.savingsRate,
     transactionCount: transactions.length,
+  };
+};
+
+const getIncomeBreakdown = (transactions: Transaction[]): DashboardIncomeBreakdown => {
+  const { amounts, transactionCounts } = getIncomeGroupTotals(transactions);
+  const total = getAllIncome(amounts);
+
+  return {
+    DIEZMOS: {
+      amount: amounts.DIEZMOS,
+      transactionCount: transactionCounts.DIEZMOS,
+      share: total === 0 ? 0 : amounts.DIEZMOS / total,
+    },
+    OFRENDAS: {
+      amount: amounts.OFRENDAS,
+      transactionCount: transactionCounts.OFRENDAS,
+      share: total === 0 ? 0 : amounts.OFRENDAS / total,
+    },
+    OTROS: {
+      amount: amounts.OTROS,
+      transactionCount: transactionCounts.OTROS,
+      share: total === 0 ? 0 : amounts.OTROS / total,
+    },
   };
 };
 
@@ -111,12 +202,13 @@ const getCategorySummaries = (
 const groupMainCategories = (
   categories: DashboardCategorySummary[],
 ): DashboardCategorySummary[] => {
+  const total = categories.reduce((amount, category) => amount + category.amount, 0);
   const mainCategories = categories.slice(0, maximumCategories);
   const remainingCategories = categories.slice(maximumCategories);
   const other = remainingCategories.reduce(
-    (total, category) => ({
-      amount: total.amount + category.amount,
-      transactionCount: total.transactionCount + category.transactionCount,
+    (summary, category) => ({
+      amount: summary.amount + category.amount,
+      transactionCount: summary.transactionCount + category.transactionCount,
     }),
     { amount: 0, transactionCount: 0 },
   );
@@ -139,7 +231,6 @@ const groupMainCategories = (
     );
   }
 
-  const total = categories.reduce((amount, category) => amount + category.amount, 0);
   return [
     ...mainCategories,
     {
@@ -151,28 +242,16 @@ const groupMainCategories = (
   ];
 };
 
-const getContributionTrend = (
-  kind: DashboardContributionKind,
-  periods: string[],
-  transactionsByPeriod: Map<string, Transaction[]>,
-): DashboardContributionTrendPoint[] =>
-  periods.map((period) => {
-    const matchingTransactions = (transactionsByPeriod.get(period) ?? []).filter(
-      (transaction) => getContributionKind(transaction) === kind,
-    );
-    return {
-      period,
-      amount: matchingTransactions.reduce((amount, transaction) => amount + transaction.amount, 0),
-      transactionCount: matchingTransactions.length,
-    };
-  });
-
-const getContributionTrends = (
-  periods: string[],
-  transactionsByPeriod: Map<string, Transaction[]>,
-): DashboardContributionTrends => ({
-  OFRENDAS: getContributionTrend("OFRENDAS", periods, transactionsByPeriod),
-  DIEZMOS: getContributionTrend("DIEZMOS", periods, transactionsByPeriod),
+const getIncomeCategories = (transactions: Transaction[]): DashboardIncomeCategories => ({
+  CONTRIBUTIONS: groupMainCategories(
+    getCategorySummaries(
+      transactions.filter(
+        (transaction) => transaction.type === "INGRESO" && getIncomeGroup(transaction) !== "OTROS",
+      ),
+      "INGRESO",
+    ),
+  ),
+  ALL: groupMainCategories(getCategorySummaries(transactions, "INGRESO")),
 });
 
 const createExpenseGroup = (
@@ -239,6 +318,16 @@ const formatDateKey = (date: Date): string =>
 const getPeriodStart = (period: string): Date =>
   new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(4, 6)) - 1, 1));
 
+interface DailyTotals {
+  incomeByGroup: Record<DashboardIncomeGroup, number>;
+  expense: number;
+}
+
+const createDailyTotals = (): DailyTotals => ({
+  incomeByGroup: createIncomeGroupAmounts(),
+  expense: 0,
+});
+
 const getPeriodDailyTrend = (
   selectedPeriod: string,
   transactions: Transaction[],
@@ -246,14 +335,18 @@ const getPeriodDailyTrend = (
 ): DashboardDailyTrendPoint[] => {
   if (dataCutoff === null) return [];
 
-  const totalsByDate = new Map<string, { income: number; expense: number }>();
+  const totalsByDate = new Map<string, DailyTotals>();
   for (const transaction of transactions) {
     const key = formatDateKey(transaction.date);
-    const current = totalsByDate.get(key) ?? { income: 0, expense: 0 };
-    totalsByDate.set(key, {
-      income: current.income + (transaction.type === "INGRESO" ? transaction.amount : 0),
-      expense: current.expense + (transaction.type === "EGRESO" ? transaction.amount : 0),
-    });
+    const current = totalsByDate.get(key) ?? createDailyTotals();
+    const incomeGroup = getIncomeGroup(transaction);
+
+    if (incomeGroup) {
+      current.incomeByGroup[incomeGroup] += transaction.amount;
+    } else if (transaction.type === "EGRESO") {
+      current.expense += transaction.amount;
+    }
+    totalsByDate.set(key, current);
   }
 
   const start = getPeriodStart(selectedPeriod);
@@ -261,7 +354,7 @@ const getPeriodDailyTrend = (
     Date.UTC(dataCutoff.getUTCFullYear(), dataCutoff.getUTCMonth(), dataCutoff.getUTCDate()),
   );
   const points: DashboardDailyTrendPoint[] = [];
-  let cumulativeNetResult = 0;
+  const cumulativeNetResult = createIncomeScopeValues();
 
   for (
     let day = start;
@@ -269,19 +362,249 @@ const getPeriodDailyTrend = (
     day = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1))
   ) {
     const date = formatDateKey(day);
-    const totals = totalsByDate.get(date) ?? { income: 0, expense: 0 };
-    const netResult = totals.income - totals.expense;
-    cumulativeNetResult += netResult;
+    const totals = totalsByDate.get(date) ?? createDailyTotals();
+    const income = createIncomeScopeValues(
+      getContributionIncome(totals.incomeByGroup),
+      getAllIncome(totals.incomeByGroup),
+    );
+    const netResult = createIncomeScopeValues(
+      income.CONTRIBUTIONS - totals.expense,
+      income.ALL - totals.expense,
+    );
+    cumulativeNetResult.CONTRIBUTIONS += netResult.CONTRIBUTIONS;
+    cumulativeNetResult.ALL += netResult.ALL;
+
     points.push({
       date,
-      income: totals.income,
+      income,
+      incomeByGroup: { ...totals.incomeByGroup },
       expense: totals.expense,
       netResult,
-      cumulativeNetResult,
+      cumulativeNetResult: { ...cumulativeNetResult },
     });
   }
 
   return points;
+};
+
+const getPeriodIncomeBehavior = (
+  dailyTrend: DashboardDailyTrendPoint[],
+  breakdown: DashboardIncomeBreakdown,
+): DashboardIncomeBehaviorPoint[] => {
+  const cumulativeAmounts = createIncomeGroupAmounts();
+
+  return dailyTrend.map((point) => {
+    cumulativeAmounts.DIEZMOS += point.incomeByGroup.DIEZMOS;
+    cumulativeAmounts.OFRENDAS += point.incomeByGroup.OFRENDAS;
+    cumulativeAmounts.OTROS += point.incomeByGroup.OTROS;
+
+    return {
+      date: point.date,
+      cumulativeShare: {
+        DIEZMOS:
+          breakdown.DIEZMOS.amount === 0
+            ? null
+            : cumulativeAmounts.DIEZMOS / breakdown.DIEZMOS.amount,
+        OFRENDAS:
+          breakdown.OFRENDAS.amount === 0
+            ? null
+            : cumulativeAmounts.OFRENDAS / breakdown.OFRENDAS.amount,
+        OTROS:
+          breakdown.OTROS.amount === 0 ? null : cumulativeAmounts.OTROS / breakdown.OTROS.amount,
+      },
+    };
+  });
+};
+
+const getPreviousPeriod = (period: string): string => {
+  const year = Number(period.slice(0, 4));
+  const month = Number(period.slice(4, 6));
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  return String(previous.getUTCFullYear()) + String(previous.getUTCMonth() + 1).padStart(2, "0");
+};
+
+const getLastDayOfPeriod = (period: string): number =>
+  new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(4, 6)), 0)).getUTCDate();
+
+const getComparisonWindow = (
+  selectedPeriod: string,
+  latestAvailablePeriod: string | null,
+  dataCutoff: Date | null,
+): DashboardComparisonWindow => {
+  const previousPeriod = getPreviousPeriod(selectedPeriod);
+  if (selectedPeriod === latestAvailablePeriod && dataCutoff !== null) {
+    return {
+      kind: "THROUGH_DAY",
+      previousPeriod,
+      throughDay: Math.min(dataCutoff.getUTCDate(), getLastDayOfPeriod(previousPeriod)),
+    };
+  }
+  return { kind: "FULL_MONTH", previousPeriod };
+};
+
+const getTransactionsForComparisonWindow = (
+  transactionsByPeriod: Map<string, Transaction[]>,
+  window: DashboardComparisonWindow,
+): Transaction[] => {
+  const transactions = transactionsByPeriod.get(window.previousPeriod) ?? [];
+  if (window.kind === "FULL_MONTH") return transactions;
+  return transactions.filter((transaction) => transaction.date.getUTCDate() <= window.throughDay);
+};
+
+const getAccumulatedSummary = (transactions: Transaction[]): DashboardAccumulatedSummary => {
+  const financialValues = getFinancialValues(transactions);
+  return {
+    income: financialValues.income,
+    expense: financialValues.expense,
+    balance: financialValues.netResult,
+  };
+};
+
+const getAccumulatedSummaryForComparisonWindow = (
+  transactions: Transaction[],
+  window: DashboardComparisonWindow,
+): DashboardAccumulatedSummary =>
+  getAccumulatedSummary(
+    transactions.filter((transaction) => {
+      if (transaction.period < window.previousPeriod) return true;
+      if (transaction.period !== window.previousPeriod) return false;
+      return window.kind === "FULL_MONTH" || transaction.date.getUTCDate() <= window.throughDay;
+    }),
+  );
+
+const getMetricComparison = (
+  currentValue: number,
+  previousValue: number,
+): DashboardMetricComparison => {
+  const delta = currentValue - previousValue;
+  return {
+    previousValue,
+    delta,
+    rate: previousValue === 0 ? null : delta / Math.abs(previousValue),
+    direction: delta === 0 ? "UNCHANGED" : delta > 0 ? "INCREASED" : "DECREASED",
+  };
+};
+
+const getScopeComparisons = (
+  currentValues: DashboardIncomeScopeValues,
+  previousValues: DashboardIncomeScopeValues,
+): Record<"CONTRIBUTIONS" | "ALL", DashboardMetricComparison> => ({
+  CONTRIBUTIONS: getMetricComparison(currentValues.CONTRIBUTIONS, previousValues.CONTRIBUTIONS),
+  ALL: getMetricComparison(currentValues.ALL, previousValues.ALL),
+});
+
+const getRateComparison = (
+  currentValue: number | null,
+  previousValue: number | null,
+): DashboardRateComparison => {
+  if (currentValue === null || previousValue === null) {
+    return {
+      currentValue,
+      previousValue,
+      delta: null,
+      direction: null,
+    };
+  }
+
+  const delta = currentValue - previousValue;
+  return {
+    currentValue,
+    previousValue,
+    delta,
+    direction: delta === 0 ? "UNCHANGED" : delta > 0 ? "INCREASED" : "DECREASED",
+  };
+};
+
+const getIncomeGroupComparisons = (
+  currentBreakdown: DashboardIncomeBreakdown,
+  previousBreakdown: DashboardIncomeBreakdown,
+): Record<DashboardIncomeGroup, DashboardMetricComparison> => ({
+  DIEZMOS: getMetricComparison(currentBreakdown.DIEZMOS.amount, previousBreakdown.DIEZMOS.amount),
+  OFRENDAS: getMetricComparison(
+    currentBreakdown.OFRENDAS.amount,
+    previousBreakdown.OFRENDAS.amount,
+  ),
+  OTROS: getMetricComparison(currentBreakdown.OTROS.amount, previousBreakdown.OTROS.amount),
+});
+
+const getPeriodComparison = (
+  selectedPeriod: string,
+  latestAvailablePeriod: string | null,
+  allTransactions: Transaction[],
+  transactionsByPeriod: Map<string, Transaction[]>,
+  dataCutoff: Date | null,
+  summary: DashboardPeriodSummary,
+  accumulated: DashboardAccumulatedSummary,
+  incomeBreakdown: DashboardIncomeBreakdown,
+): DashboardPeriodComparison => {
+  const window = getComparisonWindow(selectedPeriod, latestAvailablePeriod, dataCutoff);
+  const previousTransactions = getTransactionsForComparisonWindow(transactionsByPeriod, window);
+  const previousSummary = createPeriodSummary(window.previousPeriod, previousTransactions);
+  const previousAccumulated = getAccumulatedSummaryForComparisonWindow(allTransactions, window);
+  const previousBreakdown = getIncomeBreakdown(previousTransactions);
+
+  return {
+    window,
+    income: getScopeComparisons(summary.income, previousSummary.income),
+    incomeByGroup: getIncomeGroupComparisons(incomeBreakdown, previousBreakdown),
+    expense: getMetricComparison(summary.expense, previousSummary.expense),
+    netResult: getScopeComparisons(summary.netResult, previousSummary.netResult),
+    accumulatedBalance: getScopeComparisons(accumulated.balance, previousAccumulated.balance),
+    savingsRate: {
+      CONTRIBUTIONS: getRateComparison(
+        summary.savingsRate.CONTRIBUTIONS,
+        previousSummary.savingsRate.CONTRIBUTIONS,
+      ),
+      ALL: getRateComparison(summary.savingsRate.ALL, previousSummary.savingsRate.ALL),
+    },
+  };
+};
+
+const getIncomeGroupPeriodSummaries = (
+  financialValues: FinancialValues,
+): Record<DashboardIncomeGroup, DashboardIncomeGroupPeriodSummary> => ({
+  DIEZMOS: {
+    amount: financialValues.incomeByGroup.DIEZMOS,
+    transactionCount: financialValues.incomeTransactionCountByGroup.DIEZMOS,
+  },
+  OFRENDAS: {
+    amount: financialValues.incomeByGroup.OFRENDAS,
+    transactionCount: financialValues.incomeTransactionCountByGroup.OFRENDAS,
+  },
+  OTROS: {
+    amount: financialValues.incomeByGroup.OTROS,
+    transactionCount: financialValues.incomeTransactionCountByGroup.OTROS,
+  },
+});
+
+const getAnnualTrend = (
+  periods: string[],
+  transactionsByPeriod: Map<string, Transaction[]>,
+  allTransactions: Transaction[],
+): DashboardTrendPoint[] => {
+  const firstPeriod = periods[0];
+  if (!firstPeriod) throw new Error("No se pudo construir la evolución financiera.");
+
+  const openingBalance = getFinancialValues(
+    allTransactions.filter((transaction) => transaction.period < firstPeriod),
+  ).netResult;
+  let cumulativeBalance = { ...openingBalance };
+
+  return periods.map((period) => {
+    const financialValues = getFinancialValues(transactionsByPeriod.get(period) ?? []);
+    cumulativeBalance = createIncomeScopeValues(
+      cumulativeBalance.CONTRIBUTIONS + financialValues.netResult.CONTRIBUTIONS,
+      cumulativeBalance.ALL + financialValues.netResult.ALL,
+    );
+    return {
+      period,
+      income: financialValues.income,
+      incomeByGroup: getIncomeGroupPeriodSummaries(financialValues),
+      expense: financialValues.expense,
+      netResult: financialValues.netResult,
+      cumulativeBalance,
+    };
+  });
 };
 
 export class GetDashboardOverviewUseCase {
@@ -316,10 +639,12 @@ export class GetDashboardOverviewUseCase {
         selectedPeriod: null,
         summary: null,
         accumulated: null,
+        comparison: null,
+        incomeBreakdown: null,
         periodDailyTrend: [],
+        periodIncomeBehavior: [],
         trend: [],
-        incomeCategories: [],
-        contributionTrends: { OFRENDAS: [], DIEZMOS: [] },
+        incomeCategories: { CONTRIBUTIONS: [], ALL: [] },
         expenseComposition: null,
         expenseCategories: [],
         expenseInsights: null,
@@ -335,43 +660,14 @@ export class GetDashboardOverviewUseCase {
     }
 
     const summary = createPeriodSummary(selectedPeriod, selectedTransactions);
+    const accumulated = getAccumulatedSummary(
+      inspection.transactions.filter((transaction) => transaction.period <= selectedPeriod),
+    );
     const dataCutoff = getDataCutoff(selectedTransactions);
+    const incomeBreakdown = getIncomeBreakdown(selectedTransactions);
     const periodDailyTrend = getPeriodDailyTrend(selectedPeriod, selectedTransactions, dataCutoff);
+    const periodIncomeBehavior = getPeriodIncomeBehavior(periodDailyTrend, incomeBreakdown);
     const trendPeriods = getTrendPeriods(selectedPeriod);
-    const firstTrendPeriod = trendPeriods[0];
-    if (!firstTrendPeriod) {
-      throw new Error("No se pudo construir la evolución financiera.");
-    }
-    const openingBalance = inspection.transactions
-      .filter((transaction) => transaction.period < firstTrendPeriod)
-      .reduce(
-        (balance, transaction) =>
-          transaction.type === "INGRESO"
-            ? balance + transaction.amount
-            : balance - transaction.amount,
-        0,
-      );
-    let cumulativeBalance = openingBalance;
-    const trend: DashboardTrendPoint[] = trendPeriods.map((period) => {
-      const periodSummary = createPeriodSummary(period, transactionsByPeriod.get(period) ?? []);
-      cumulativeBalance += periodSummary.netResult;
-      return { ...periodSummary, cumulativeBalance };
-    });
-    const accumulatedIncome = inspection.transactions
-      .filter(
-        (transaction) => transaction.period <= selectedPeriod && transaction.type === "INGRESO",
-      )
-      .reduce((total, transaction) => total + transaction.amount, 0);
-    const accumulatedExpense = inspection.transactions
-      .filter(
-        (transaction) => transaction.period <= selectedPeriod && transaction.type === "EGRESO",
-      )
-      .reduce((total, transaction) => total + transaction.amount, 0);
-    const accumulated: DashboardAccumulatedSummary = {
-      income: accumulatedIncome,
-      expense: accumulatedExpense,
-      balance: accumulatedIncome - accumulatedExpense,
-    };
     const allNonSalaryExpenseCategories = getCategorySummaries(
       selectedTransactions.filter((transaction) => !isSalaryAndFeesExpense(transaction)),
       "EGRESO",
@@ -382,10 +678,21 @@ export class GetDashboardOverviewUseCase {
       selectedPeriod,
       summary,
       accumulated,
+      comparison: getPeriodComparison(
+        selectedPeriod,
+        availablePeriods[0] ?? null,
+        inspection.transactions,
+        transactionsByPeriod,
+        dataCutoff,
+        summary,
+        accumulated,
+        incomeBreakdown,
+      ),
+      incomeBreakdown,
       periodDailyTrend,
-      trend,
-      incomeCategories: groupMainCategories(getCategorySummaries(selectedTransactions, "INGRESO")),
-      contributionTrends: getContributionTrends(trendPeriods, transactionsByPeriod),
+      periodIncomeBehavior,
+      trend: getAnnualTrend(trendPeriods, transactionsByPeriod, inspection.transactions),
+      incomeCategories: getIncomeCategories(selectedTransactions),
       expenseComposition: getExpenseComposition(selectedTransactions),
       expenseCategories: groupMainCategories(allNonSalaryExpenseCategories),
       expenseInsights: getExpenseInsights(allNonSalaryExpenseCategories),

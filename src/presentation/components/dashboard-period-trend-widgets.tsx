@@ -1,8 +1,7 @@
 import {
   Bar,
+  BarChart,
   CartesianGrid,
-  Cell,
-  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -13,10 +12,21 @@ import {
   YAxis,
 } from "recharts";
 import type { ReactNode } from "react";
-import type { DashboardDailyTrendPoint } from "../../domain/dashboard";
-import { formatCompactMoney, formatMoney } from "../formatters";
+import type {
+  DashboardDailyTrendPoint,
+  DashboardIncomeBehaviorPoint,
+  DashboardIncomeGroup,
+  DashboardIncomeScope,
+} from "../../domain/dashboard";
+import { getIncomeScopeLabel, incomeGroupDetails } from "../dashboard-income-presentation";
+import { formatCompactMoney, formatMoney, formatPercent } from "../formatters";
 import { ChartEmptyState } from "./dashboard-chart-support";
 import { formatChartDate, formatChartDay, tooltipStyle } from "./dashboard-chart-utils";
+
+const incomeGroupsByScope = {
+  CONTRIBUTIONS: ["DIEZMOS", "OFRENDAS"],
+  ALL: ["DIEZMOS", "OFRENDAS", "OTROS"],
+} as const satisfies Record<DashboardIncomeScope, readonly DashboardIncomeGroup[]>;
 
 function DailyChartViewport({ ariaLabel, children }: { ariaLabel: string; children: ReactNode }) {
   return (
@@ -31,130 +41,40 @@ function DailyChartViewport({ ariaLabel, children }: { ariaLabel: string; childr
   );
 }
 
-export function PeriodBalanceTrendChart({ trend }: { trend: DashboardDailyTrendPoint[] }) {
-  return (
-    <figure className="card min-w-0" aria-labelledby="period-balance-trend-title">
-      <div>
-        <h4 className="section-title" id="period-balance-trend-title">
-          Saldo diario y acumulado del período
-        </h4>
-        <p className="mt-1 text-sm text-slate-400">
-          Barras: saldo neto diario. Línea: acumulado desde el inicio del período.
-        </p>
-      </div>
-      {trend.length === 0 ? (
-        <ChartEmptyState>
-          No hay movimientos hasta la fecha de corte de este período.
-        </ChartEmptyState>
-      ) : (
-        <>
-          <DailyChartViewport ariaLabel="Gráfico desplazable de saldo diario y acumulado del período">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                accessibilityLayer
-                data={trend}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid
-                  stroke="var(--ui-chart-grid)"
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                  tickFormatter={formatChartDay}
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={18}
-                />
-                <YAxis
-                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                  tickFormatter={formatCompactMoney}
-                  tickLine={false}
-                  axisLine={false}
-                  width={68}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{ fill: "var(--ui-chart-cursor)" }}
-                  formatter={(value) => formatMoney(Number(value))}
-                  labelFormatter={(label) => formatChartDate(String(label))}
-                />
-                <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
-                <ReferenceLine y={0} stroke="var(--ui-text-faint)" strokeDasharray="4 4" />
-                <Bar
-                  dataKey="netResult"
-                  name="Saldo neto diario"
-                  radius={[4, 4, 4, 4]}
-                  isAnimationActive={false}
-                >
-                  {trend.map((point) => (
-                    <Cell
-                      fill={point.netResult >= 0 ? "var(--ui-success)" : "var(--ui-danger)"}
-                      key={point.date}
-                    />
-                  ))}
-                </Bar>
-                <Line
-                  type="linear"
-                  dataKey="cumulativeNetResult"
-                  name="Acumulado del período"
-                  stroke="var(--ui-chart-2)"
-                  strokeWidth={3}
-                  dot={{ fill: "var(--ui-chart-2)", r: 3 }}
-                  activeDot={{ r: 5 }}
-                  isAnimationActive={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </DailyChartViewport>
-          <figcaption className="sr-only">
-            Evolución diaria del saldo neto y su acumulado desde el inicio del período.
-          </figcaption>
-          <table className="sr-only">
-            <caption>Valores diarios de saldo neto y acumulado del período</caption>
-            <thead>
-              <tr>
-                <th scope="col">Fecha</th>
-                <th scope="col">Saldo neto diario</th>
-                <th scope="col">Acumulado del período</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trend.map((point) => (
-                <tr key={point.date}>
-                  <th scope="row">{formatChartDate(point.date)}</th>
-                  <td>{formatMoney(point.netResult)}</td>
-                  <td>{formatMoney(point.cumulativeNetResult)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-    </figure>
+export function PeriodIncomeBehaviorChart({
+  trend,
+  scope,
+}: {
+  trend: DashboardIncomeBehaviorPoint[];
+  scope: DashboardIncomeScope;
+}) {
+  const groups = incomeGroupsByScope[scope];
+  const visibleGroups = groups.filter((group) =>
+    trend.some((point) => point.cumulativeShare[group] !== null),
   );
-}
 
-export function PeriodFinancialTrendChart({ trend }: { trend: DashboardDailyTrendPoint[] }) {
   return (
-    <figure className="card min-w-0" aria-labelledby="period-financial-trend-title">
+    <figure className="card min-w-0" aria-labelledby="period-income-behavior-title">
       <div>
-        <h4 className="section-title" id="period-financial-trend-title">
-          Ingresos frente a egresos por día
+        <h4 className="section-title" id="period-income-behavior-title">
+          Ritmo acumulado de ingresos
         </h4>
         <p className="mt-1 text-sm text-slate-400">
-          Líneas diarias de ingresos y egresos registrados hasta la fecha de corte.
+          Avance diario de cada grupo sobre su propio total mensual. Alcance:{" "}
+          {getIncomeScopeLabel(scope)}.
         </p>
       </div>
       {trend.length === 0 ? (
         <ChartEmptyState>
           No hay movimientos hasta la fecha de corte de este período.
         </ChartEmptyState>
+      ) : visibleGroups.length === 0 ? (
+        <ChartEmptyState>
+          No hay ingresos en el alcance seleccionado hasta la fecha de corte.
+        </ChartEmptyState>
       ) : (
         <>
-          <DailyChartViewport ariaLabel="Gráfico desplazable de ingresos y egresos diarios">
+          <DailyChartViewport ariaLabel="Gráfico desplazable del ritmo acumulado de ingresos">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 accessibilityLayer
@@ -175,45 +95,168 @@ export function PeriodFinancialTrendChart({ trend }: { trend: DashboardDailyTren
                   minTickGap={18}
                 />
                 <YAxis
+                  domain={[0, 1]}
                   tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                  tickFormatter={formatCompactMoney}
+                  tickFormatter={(value) => formatPercent(Number(value))}
+                  tickLine={false}
+                  axisLine={false}
+                  width={54}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  cursor={{ stroke: "var(--ui-chart-cursor)", strokeWidth: 16 }}
+                  formatter={(value) => formatPercent(Number(value))}
+                  labelFormatter={(label) => formatChartDate(String(label))}
+                />
+                <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
+                {visibleGroups.map((group) => {
+                  const details = incomeGroupDetails[group];
+                  return (
+                    <Line
+                      dataKey={`cumulativeShare.${group}`}
+                      dot={false}
+                      key={group}
+                      name={details.label}
+                      stroke={details.color}
+                      strokeWidth={3}
+                      type="stepAfter"
+                      activeDot={{ r: 5 }}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
+                  );
+                })}
+              </LineChart>
+            </ResponsiveContainer>
+          </DailyChartViewport>
+          <figcaption className="sr-only">
+            Ritmo acumulado de {getIncomeScopeLabel(scope).toLocaleLowerCase("es-PE")} por día del
+            período.
+          </figcaption>
+          <table className="sr-only">
+            <caption>Ritmo acumulado de ingresos por día</caption>
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                {visibleGroups.map((group) => (
+                  <th key={group} scope="col">
+                    {incomeGroupDetails[group].label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {trend.map((point) => (
+                <tr key={point.date}>
+                  <th scope="row">{formatChartDate(point.date)}</th>
+                  {visibleGroups.map((group) => {
+                    const value = point.cumulativeShare[group];
+                    return (
+                      <td key={group}>{value === null ? "Sin ingresos" : formatPercent(value)}</td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </figure>
+  );
+}
+
+export function PeriodFinancialTrendChart({
+  trend,
+  scope,
+}: {
+  trend: DashboardDailyTrendPoint[];
+  scope: DashboardIncomeScope;
+}) {
+  const hasFinancialMovement = trend.some(
+    (point) => point.income[scope] !== 0 || point.expense !== 0,
+  );
+  const chartData = trend.map((point) => ({
+    date: point.date,
+    income: point.income[scope],
+    expense: -point.expense,
+  }));
+
+  return (
+    <figure className="card min-w-0" aria-labelledby="period-financial-trend-title">
+      <div>
+        <h4 className="section-title" id="period-financial-trend-title">
+          Ingresos frente a egresos por día
+        </h4>
+        <p className="mt-1 text-sm text-slate-400">
+          Barras sobre cero: ingresos. Barras bajo cero: egresos. Alcance de ingresos:{" "}
+          {getIncomeScopeLabel(scope)}.
+        </p>
+      </div>
+      {trend.length === 0 ? (
+        <ChartEmptyState>
+          No hay movimientos hasta la fecha de corte de este período.
+        </ChartEmptyState>
+      ) : !hasFinancialMovement ? (
+        <ChartEmptyState>
+          No hay ingresos en el alcance seleccionado ni egresos hasta la fecha de corte.
+        </ChartEmptyState>
+      ) : (
+        <>
+          <DailyChartViewport ariaLabel="Gráfico desplazable de ingresos y egresos diarios">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                accessibilityLayer
+                data={chartData}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
+                  tickFormatter={formatChartDay}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={18}
+                />
+                <YAxis
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
+                  tickFormatter={(value) => formatCompactMoney(Math.abs(Number(value)))}
                   tickLine={false}
                   axisLine={false}
                   width={68}
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  cursor={{ stroke: "var(--ui-chart-cursor)", strokeWidth: 16 }}
-                  formatter={(value) => formatMoney(Number(value))}
+                  cursor={{ fill: "var(--ui-chart-cursor)" }}
+                  formatter={(value) => formatMoney(Math.abs(Number(value)))}
                   labelFormatter={(label) => formatChartDate(String(label))}
                 />
                 <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
-                <Line
-                  type="linear"
+                <ReferenceLine y={0} stroke="var(--ui-text-faint)" />
+                <Bar
                   dataKey="income"
+                  fill="var(--ui-success)"
+                  isAnimationActive={false}
                   name="Ingresos"
-                  stroke="var(--ui-success)"
-                  strokeWidth={3}
-                  dot={{ fill: "var(--ui-success)", r: 3 }}
-                  activeDot={{ r: 5 }}
-                  isAnimationActive={false}
+                  radius={[4, 4, 0, 0]}
                 />
-                <Line
-                  type="linear"
+                <Bar
                   dataKey="expense"
-                  name="Egresos"
-                  stroke="var(--ui-danger)"
-                  strokeWidth={3}
-                  strokeDasharray="7 4"
-                  dot={{ fill: "var(--ui-danger)", r: 3, strokeWidth: 2 }}
-                  activeDot={{ r: 5 }}
+                  fill="var(--ui-danger)"
                   isAnimationActive={false}
+                  name="Egresos"
+                  radius={[0, 0, 4, 4]}
                 />
-              </LineChart>
+              </BarChart>
             </ResponsiveContainer>
           </DailyChartViewport>
           <figcaption className="sr-only">
-            Comparación diaria de ingresos y egresos del período seleccionado.
+            Comparación diaria de {getIncomeScopeLabel(scope).toLocaleLowerCase("es-PE")} y egresos
+            del período seleccionado.
           </figcaption>
           <table className="sr-only">
             <caption>Valores diarios de ingresos y egresos</caption>
@@ -228,7 +271,7 @@ export function PeriodFinancialTrendChart({ trend }: { trend: DashboardDailyTren
               {trend.map((point) => (
                 <tr key={point.date}>
                   <th scope="row">{formatChartDate(point.date)}</th>
-                  <td>{formatMoney(point.income)}</td>
+                  <td>{formatMoney(point.income[scope])}</td>
                   <td>{formatMoney(point.expense)}</td>
                 </tr>
               ))}

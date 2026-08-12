@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DataSourceQueries } from "../application/use-cases/data-source-queries";
 import { GetBasicFinancialSummaryUseCase } from "../application/use-cases/get-basic-financial-summary";
 import { GetDashboardOverviewUseCase } from "../application/use-cases/get-dashboard-overview";
@@ -15,9 +15,13 @@ import { InMemoryTransactionRepository } from "../infrastructure/memory/in-memor
 import { makeTransaction } from "../test/fixtures";
 import { AuthContext, type AuthContextValue } from "./auth/auth-context";
 import { AppRoutes } from "./app";
+import { formatMoney } from "./formatters";
 import { ThemeProvider } from "./theme/theme-provider";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const invalidIssue: TransactionValidationIssue = {
   code: "INVALID_DATE",
@@ -76,6 +80,11 @@ class FailingDashboardOverviewUseCase extends GetDashboardOverviewUseCase {
   }
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname + location.search}</span>;
+}
+
 const renderApp = (initialEntry: string, services = createServices()) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -87,6 +96,7 @@ const renderApp = (initialEntry: string, services = createServices()) => {
         <AuthContext.Provider value={authenticatedUser}>
           <MemoryRouter initialEntries={[initialEntry]}>
             <AppRoutes services={services} />
+            <LocationProbe />
           </MemoryRouter>
         </AuthContext.Provider>
       </QueryClientProvider>
@@ -114,122 +124,244 @@ describe("navegación principal", () => {
     expect(screen.getByText(/^Versión v\d+\.\d+\.\d+ · /)).toBeInTheDocument();
   });
 
-  it("actualiza el período del resumen y conserva el enlace a movimientos", async () => {
+  it("mantiene un único alcance global en la URL y no vuelve a consultar al alternarlo", async () => {
     const user = userEvent.setup();
-    renderApp("/", createServices(undefined, [invalidIssue]));
+    const services = createServices(
+      [
+        makeTransaction({
+          id: "AUG-TITHE",
+          period: "202608",
+          date: new Date("2026-08-03T12:00:00.000Z"),
+          type: "INGRESO",
+          amount: 120,
+          category: "Diezmos",
+        }),
+        makeTransaction({
+          id: "AUG-OFFERING",
+          period: "202608",
+          date: new Date("2026-08-06T12:00:00.000Z"),
+          type: "INGRESO",
+          amount: 80,
+          category: "Ofrendas",
+        }),
+        makeTransaction({
+          id: "AUG-OTHER",
+          period: "202608",
+          date: new Date("2026-08-08T12:00:00.000Z"),
+          type: "INGRESO",
+          amount: 40,
+          category: "Donación especial",
+        }),
+        makeTransaction({
+          id: "AUG-EXPENSE",
+          period: "202608",
+          date: new Date("2026-08-08T12:00:00.000Z"),
+          type: "EGRESO",
+          amount: 50,
+          category: "Servicios",
+        }),
+        makeTransaction({
+          id: "JUL-TITHE",
+          period: "202607",
+          date: new Date("2026-07-03T12:00:00.000Z"),
+          type: "INGRESO",
+          amount: 100,
+          category: "Diezmos",
+        }),
+      ],
+      [invalidIssue],
+    );
+    const execute = vi.spyOn(services.dashboard, "execute");
+    renderApp("/?income=invalid&period=202608", services);
 
-    const periodSelect = await screen.findByRole("combobox", { name: "Período" });
-    const indicators = screen.getByLabelText("Indicadores del período");
-    const initialIncomeCard = within(indicators)
-      .getByText("Ingresos", { selector: "p" })
-      .closest("article");
-    if (!initialIncomeCard) throw new Error("No se encontró el indicador de ingresos.");
-    expect(initialIncomeCard).toHaveTextContent("1,000.00");
-    expect(periodSelect).toHaveValue("202608");
+    const scopeControl = await screen.findByRole("group", {
+      name: "Alcance global de ingresos",
+    });
+    expect(within(scopeControl).getAllByRole("radio")).toHaveLength(2);
+    expect(
+      within(scopeControl).getByRole("radio", { name: "Solo diezmos + ofrendas" }),
+    ).toBeChecked();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Hay 1 fila inválida que no se incluyen en los totales.",
     );
-    expect(
-      within(
-        screen.getByRole("table", { name: "Valores diarios de ingresos y egresos" }),
-      ).getAllByRole("row"),
-    ).toHaveLength(21);
 
-    await user.selectOptions(periodSelect, "202607");
+    const incomeCards = screen.getByRole("region", { name: "Indicadores de ingresos" });
+    expect(within(incomeCards).getByText("Aportes")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Otros ingresos")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Ingresos totales")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Diezmos")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Ofrendas")).toBeInTheDocument();
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    await user.click(within(scopeControl).getByRole("radio", { name: "Total con otros ingresos" }));
 
     await waitFor(() => {
-      expect(periodSelect).toHaveValue("202607");
-      const selectedIncomeCard = within(indicators)
-        .getByText("Ingresos", { selector: "p" })
-        .closest("article");
-      if (!selectedIncomeCard) throw new Error("No se encontró el indicador de ingresos.");
-      expect(selectedIncomeCard).toHaveTextContent("700.00");
       expect(
-        within(
-          screen.getByRole("table", { name: "Valores diarios de ingresos y egresos" }),
-        ).getAllByRole("row"),
-      ).toHaveLength(19);
+        within(scopeControl).getByRole("radio", { name: "Total con otros ingresos" }),
+      ).toBeChecked();
+      expect(screen.getByTestId("location")).toHaveTextContent("income=all");
+      expect(screen.getByTestId("location")).toHaveTextContent("period=202608");
     });
-    expect(screen.getByRole("link", { name: "Ver todos" })).toHaveAttribute(
-      "href",
-      "/movimientos?period=202607",
-    );
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Alcance de ingresos: Total con otros ingresos\./)).toBeInTheDocument();
+    expect(screen.getByText("Composición de total con otros ingresos.")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Aportes")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Otros ingresos")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Ingresos totales")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Período" }), "202607");
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Período" })).toHaveValue("202607");
+      expect(screen.getByTestId("location")).toHaveTextContent("income=all");
+      expect(screen.getByTestId("location")).toHaveTextContent("period=202607");
+      expect(screen.getByRole("link", { name: "Ver todos" })).toHaveAttribute(
+        "href",
+        "/movimientos?period=202607",
+      );
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it("muestra los seis indicadores y permite revelar el detalle acumulado", async () => {
+  it("muestra los indicadores y comparaciones de ambos escenarios financieros", async () => {
+    renderApp("/");
+
+    const financialCards = await screen.findByLabelText("Indicadores financieros del período");
+    const expenses = within(financialCards).getByText("Egresos").closest("article");
+    const contributions = within(financialCards)
+      .getByText("Resultado de aportes")
+      .closest("article");
+    const total = within(financialCards).getByText("Resultado total").closest("article");
+    if (!expenses || !contributions || !total) {
+      throw new Error("No se encontraron los indicadores financieros esperados.");
+    }
+
+    expect(expenses).toHaveTextContent("Anterior");
+    expect(expenses).toHaveTextContent("Diferencia");
+    expect(contributions).toHaveTextContent("Escenario analítico");
+    expect(contributions).toHaveTextContent("Tasa de ahorro");
+    expect(contributions).toHaveTextContent("Saldo acumulado");
+    expect(contributions).toHaveAttribute("data-selected");
+    expect(total).toHaveTextContent("Saldo contable");
+    expect(total).not.toHaveAttribute("data-selected");
+  });
+
+  it("organiza el análisis en tabs accesibles y conserva el tab activo al cambiar de período", async () => {
     const user = userEvent.setup();
     renderApp("/");
 
-    const indicators = await screen.findByLabelText("Indicadores del período");
-    expect(within(indicators).getByText("Tasa de ahorro")).toBeInTheDocument();
-    expect(within(indicators).getByText("Saldo acumulado")).toBeInTheDocument();
-    const accumulatedDetail = within(indicators).getByText("Ver acumulados").closest("details");
-    if (!accumulatedDetail) throw new Error("No se encontró el detalle acumulado.");
-    expect(accumulatedDetail).not.toHaveAttribute("open");
-
-    await user.click(within(indicators).getByText("Ver acumulados"));
-
-    expect(accumulatedDetail).toHaveAttribute("open");
-    expect(within(accumulatedDetail).getByText("Egresos")).toBeInTheDocument();
-  });
-
-  it("muestra las tendencias anuales accesibles de ofrendas y diezmos", async () => {
-    renderApp("/");
-
-    expect(
-      await screen.findByRole("heading", { name: "Comportamiento de ofrendas" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Comportamiento de diezmos" })).toBeInTheDocument();
-
-    const offeringsTable = screen.getByRole("table", { name: "Comportamiento de ofrendas" });
-    const tithesTable = screen.getByRole("table", { name: "Comportamiento de diezmos" });
-    expect(
-      within(offeringsTable).getByRole("columnheader", { name: "Monto recibido" }),
-    ).toBeInTheDocument();
-    expect(
-      within(offeringsTable).getByRole("columnheader", { name: "Número de aportes" }),
-    ).toBeInTheDocument();
-    expect(within(offeringsTable).getAllByRole("row")).toHaveLength(13);
-    expect(within(tithesTable).getAllByRole("row")).toHaveLength(13);
-  });
-
-  it("prioriza el análisis diario antes del horizonte anual y conserva sus tablas accesibles", async () => {
-    renderApp("/");
-
-    await screen.findByRole("heading", { name: "Comportamiento del período" });
-
-    expect(
-      screen
-        .getAllByRole("heading", { level: 3 })
-        .map((heading) => heading.textContent)
-        .slice(-6),
-    ).toEqual([
-      "Indicadores clave",
-      "Comportamiento del período",
-      "Ingresos del período",
-      "Análisis ejecutivo de egresos",
-      "Horizonte de 12 meses",
-      "Actividad reciente",
-    ]);
-
-    const dailyBalanceTable = screen.getByRole("table", {
-      name: "Valores diarios de saldo neto y acumulado del período",
-    });
-    const dailyFinancialTable = screen.getByRole("table", {
-      name: "Valores diarios de ingresos y egresos",
-    });
-    expect(
-      within(dailyBalanceTable).getByRole("columnheader", { name: "Acumulado del período" }),
-    ).toBeInTheDocument();
-    expect(
-      within(dailyFinancialTable).getByRole("columnheader", { name: "Ingresos" }),
-    ).toBeInTheDocument();
-    expect(
-      within(dailyFinancialTable).getByRole("columnheader", { name: "Egresos" }),
-    ).toBeInTheDocument();
+    const tablist = await screen.findByRole("tablist", { name: "Horizonte del análisis" });
+    const currentTab = within(tablist).getByRole("tab", { name: "Período actual" });
+    const annualTab = within(tablist).getByRole("tab", { name: "Últimos 12 meses" });
+    expect(currentTab).toHaveAttribute("aria-selected", "true");
+    expect(annualTab).toHaveAttribute("aria-selected", "false");
     expect(
       screen.getByRole("region", { name: "Gráfico desplazable de ingresos y egresos diarios" }),
     ).toHaveAttribute("tabindex", "0");
+
+    const accumulatedDetail = screen.getByText("Ver ritmo acumulado por grupo").closest("details");
+    if (!accumulatedDetail) throw new Error("No se encontró el detalle de ritmo acumulado.");
+    expect(accumulatedDetail).not.toHaveAttribute("open");
+    await user.click(within(accumulatedDetail).getByText("Ver ritmo acumulado por grupo"));
+    expect(accumulatedDetail).toHaveAttribute("open");
+    expect(
+      screen.getByRole("table", { name: "Ritmo acumulado de ingresos por día" }),
+    ).toBeInTheDocument();
+
+    await user.click(annualTab);
+    expect(annualTab).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("heading", { name: "Composición mensual de ingresos" }),
+    ).toBeInTheDocument();
+    const compositionTable = screen.getByRole("table", {
+      name: "Composición mensual de ingresos",
+    });
+    expect(
+      within(compositionTable).getByRole("columnheader", { name: "Diezmos" }),
+    ).toBeInTheDocument();
+    expect(
+      within(compositionTable).getByRole("columnheader", { name: "Ofrendas" }),
+    ).toBeInTheDocument();
+    expect(
+      within(compositionTable).getByRole("columnheader", { name: "Otros ingresos" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(currentTab).toHaveFocus();
+    expect(currentTab).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{End}");
+    expect(annualTab).toHaveFocus();
+    expect(annualTab).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{Home}");
+    expect(currentTab).toHaveFocus();
+    expect(currentTab).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{End}");
+    expect(annualTab).toHaveAttribute("aria-selected", "true");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Período" }), "202607");
+    await waitFor(() => {
+      expect(annualTab).toHaveAttribute("aria-selected", "true");
+    });
+  });
+
+  it("mantiene los tres ingresos visibles cuando no hay aportes ni otros ingresos", async () => {
+    const user = userEvent.setup();
+    renderApp(
+      "/",
+      createServices([
+        makeTransaction({
+          id: "AUG-EXPENSE",
+          period: "202608",
+          date: new Date("2026-08-08T12:00:00.000Z"),
+          type: "EGRESO",
+          amount: 250,
+          category: "Servicios",
+        }),
+      ]),
+    );
+
+    const incomeCards = await screen.findByRole("region", { name: "Indicadores de ingresos" });
+    expect(within(incomeCards).getByText("Aportes")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Otros ingresos")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Ingresos totales")).toBeInTheDocument();
+    expect(screen.getAllByText("No aplica")).toHaveLength(2);
+
+    await user.click(screen.getByRole("radio", { name: "Total con otros ingresos" }));
+    expect(within(incomeCards).getByText("Aportes")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Otros ingresos")).toBeInTheDocument();
+    expect(within(incomeCards).getByText("Ingresos totales")).toBeInTheDocument();
+  });
+
+  it("mantiene legibles las cifras grandes en las tarjetas de ingresos", async () => {
+    const contributions = 1_234_567_890.12;
+    const otherIncome = 98_765_432.1;
+    renderApp(
+      "/",
+      createServices([
+        makeTransaction({
+          id: "AUG-LARGE-TITHE",
+          period: "202608",
+          date: new Date("2026-08-08T12:00:00.000Z"),
+          type: "INGRESO",
+          amount: contributions,
+          category: "Diezmos",
+        }),
+        makeTransaction({
+          id: "AUG-LARGE-OTHER",
+          period: "202608",
+          date: new Date("2026-08-09T12:00:00.000Z"),
+          type: "INGRESO",
+          amount: otherIncome,
+          category: "Campaña",
+        }),
+      ]),
+    );
+
+    const incomeCards = await screen.findByRole("region", { name: "Indicadores de ingresos" });
+    expect(incomeCards).toHaveTextContent(formatMoney(contributions).replace(/\u00a0/g, " "));
+    expect(incomeCards).toHaveTextContent(
+      formatMoney(contributions + otherIncome).replace(/\u00a0/g, " "),
+    );
   });
 
   it("marca el destino activo y cierra el menú móvil al navegar", async () => {

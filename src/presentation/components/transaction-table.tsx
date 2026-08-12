@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { getIncomeGroup } from "../../domain/income-groups";
 import type { Transaction } from "../../domain/transaction";
 import {
   formatCompactDate,
@@ -10,16 +11,6 @@ import {
 
 const getTransactionConcept = (transaction: Transaction): string =>
   transaction.description ?? transaction.category;
-
-const normalizeCategory = (category: string): string => category.trim().toLocaleLowerCase("es-PE");
-
-const isTitheCategory = (category: string): boolean => {
-  const normalizedCategory = normalizeCategory(category);
-  return normalizedCategory === "diezmo" || normalizedCategory === "diezmos";
-};
-
-const isOfferingCategory = (category: string): boolean =>
-  normalizeCategory(category) === "ofrendas";
 
 const getTransactionTypeLabel = (transaction: Transaction): string =>
   transaction.type === "INGRESO" ? "Ingreso" : "Egreso";
@@ -56,12 +47,9 @@ function TransactionAmount({ transaction }: { transaction: Transaction }) {
 function TransactionPreview({ transaction }: { transaction: Transaction }) {
   const concept = getTransactionConcept(transaction);
   const category = concept === transaction.category ? null : transaction.category;
-  const donor = isTitheCategory(transaction.category)
-    ? transaction.donorOrProvider?.trim() || null
-    : null;
-  const offeringDate = isOfferingCategory(transaction.category)
-    ? formatPreviewDate(transaction.date)
-    : null;
+  const incomeGroup = getIncomeGroup(transaction);
+  const donor = incomeGroup === "DIEZMOS" ? transaction.donorOrProvider?.trim() || null : null;
+  const offeringDate = incomeGroup === "OFRENDAS" ? formatPreviewDate(transaction.date) : null;
 
   if (!category && !donor && !offeringDate) return null;
 

@@ -37,286 +37,232 @@ const invalidIssue: TransactionValidationIssue = {
 };
 
 describe("GetDashboardOverviewUseCase", () => {
-  it("resume el período elegido, sus movimientos recientes y la calidad de datos", async () => {
-    const repository = new InMemoryTransactionRepository(
-      [
-        transactionForPeriod("ING-01", "202608", "INGRESO", 1_200, "Ofrendas", 2),
-        transactionForPeriod("EGR-01", "202608", "EGRESO", 350, "Ayuda social", 20),
-        transactionForPeriod("EGR-02", "202608", "EGRESO", 200, "Servicios", 25),
-        transactionForPeriod("ING-02", "202607", "INGRESO", 900, "Diezmos", 3),
-      ],
-      [invalidIssue],
-    );
+  it("resume aportes, otros y total con métricas comparables por alcance", async () => {
+    const overview = await new GetDashboardOverviewUseCase(
+      new InMemoryTransactionRepository([
+        transactionForPeriod("AUG-TITHE", "202608", "INGRESO", 100, "Diezmos", 2),
+        transactionForPeriod("AUG-OFFERING", "202608", "INGRESO", 50, "Ofrendas", 3),
+        transactionForPeriod("AUG-OTHER", "202608", "INGRESO", 80, "Donación especial", 5),
+        transactionForPeriod("AUG-EXPENSE", "202608", "EGRESO", 40, "Servicios", 5),
+        transactionForPeriod("JUL-TITHE", "202607", "INGRESO", 70, "Diezmos", 2),
+        transactionForPeriod("JUL-OFFERING", "202607", "INGRESO", 30, "Ofrendas", 3),
+        transactionForPeriod("JUL-OTHER", "202607", "INGRESO", 20, "Donación especial", 5),
+        transactionForPeriod("JUL-EXPENSE", "202607", "EGRESO", 10, "Servicios", 5),
+      ]),
+    ).execute("202608");
 
-    const overview = await new GetDashboardOverviewUseCase(repository).execute("202608");
-
-    expect(overview.selectedPeriod).toBe("202608");
     expect(overview.summary).toEqual({
       period: "202608",
-      income: 1_200,
-      expense: 550,
-      netResult: 650,
-      savingsRate: 650 / 1_200,
-      transactionCount: 3,
+      income: { CONTRIBUTIONS: 150, ALL: 230 },
+      expense: 40,
+      netResult: { CONTRIBUTIONS: 110, ALL: 190 },
+      savingsRate: { CONTRIBUTIONS: 110 / 150, ALL: 190 / 230 },
+      transactionCount: 4,
     });
-    expect(overview.accumulated).toEqual({ income: 2_100, expense: 550, balance: 1_550 });
-    expect(overview.incomeCategories).toEqual([
-      { category: "Ofrendas", amount: 1_200, transactionCount: 1, share: 1 },
+    expect(overview.accumulated).toEqual({
+      income: { CONTRIBUTIONS: 250, ALL: 350 },
+      expense: 50,
+      balance: { CONTRIBUTIONS: 200, ALL: 300 },
+    });
+    expect(overview.incomeBreakdown).toEqual({
+      DIEZMOS: { amount: 100, transactionCount: 1, share: 100 / 230 },
+      OFRENDAS: { amount: 50, transactionCount: 1, share: 50 / 230 },
+      OTROS: { amount: 80, transactionCount: 1, share: 80 / 230 },
+    });
+    expect(overview.incomeCategories.CONTRIBUTIONS.map((category) => category.category)).toEqual([
+      "Diezmos",
+      "Ofrendas",
     ]);
-    expect(overview.contributionTrends.OFRENDAS).toHaveLength(12);
-    expect(overview.contributionTrends.OFRENDAS.find((point) => point.period === "202608")).toEqual(
-      {
-        period: "202608",
-        amount: 1_200,
-        transactionCount: 1,
+    expect(overview.incomeCategories.ALL.map((category) => category.category)).toEqual([
+      "Diezmos",
+      "Donación especial",
+      "Ofrendas",
+    ]);
+    expect(overview.comparison).toMatchObject({
+      window: { kind: "THROUGH_DAY", previousPeriod: "202607", throughDay: 5 },
+      income: {
+        CONTRIBUTIONS: { previousValue: 100, delta: 50, rate: 0.5, direction: "INCREASED" },
+        ALL: { previousValue: 120, delta: 110, rate: 110 / 120, direction: "INCREASED" },
       },
-    );
-    expect(overview.contributionTrends.DIEZMOS.find((point) => point.period === "202607")).toEqual({
-      period: "202607",
-      amount: 900,
-      transactionCount: 1,
+      incomeByGroup: {
+        DIEZMOS: { previousValue: 70, delta: 30, rate: 30 / 70, direction: "INCREASED" },
+        OFRENDAS: { previousValue: 30, delta: 20, rate: 20 / 30, direction: "INCREASED" },
+        OTROS: { previousValue: 20, delta: 60, rate: 3, direction: "INCREASED" },
+      },
+      expense: { previousValue: 10, delta: 30, rate: 3, direction: "INCREASED" },
+      netResult: {
+        CONTRIBUTIONS: { previousValue: 90, delta: 20, rate: 20 / 90, direction: "INCREASED" },
+        ALL: { previousValue: 110, delta: 80, rate: 80 / 110, direction: "INCREASED" },
+      },
+      accumulatedBalance: {
+        CONTRIBUTIONS: { previousValue: 90, delta: 110, rate: 110 / 90, direction: "INCREASED" },
+        ALL: { previousValue: 110, delta: 190, rate: 190 / 110, direction: "INCREASED" },
+      },
     });
-    expect(overview.contributionTrends.DIEZMOS.find((point) => point.period === "202608")).toEqual({
-      period: "202608",
-      amount: 0,
-      transactionCount: 0,
+    expect(overview.comparison?.savingsRate.CONTRIBUTIONS).toEqual({
+      currentValue: 110 / 150,
+      previousValue: 0.9,
+      delta: 110 / 150 - 0.9,
+      direction: "DECREASED",
     });
-    expect(overview.recentTransactions.map((transaction) => transaction.id)).toEqual([
-      "EGR-02",
-      "EGR-01",
-      "ING-01",
-    ]);
-    expect(overview.dataQuality).toEqual({
-      totalDataRowCount: 5,
-      validTransactionCount: 4,
-      invalidTransactionCount: 1,
+    expect(overview.comparison?.savingsRate.ALL).toEqual({
+      currentValue: 190 / 230,
+      previousValue: 110 / 120,
+      delta: 190 / 230 - 110 / 120,
+      direction: "DECREASED",
     });
   });
 
-  it("genera doce meses calendario y calcula cada saldo acumulado con el historial anterior", async () => {
-    const periods = [
-      "202608",
-      "202607",
-      "202606",
-      "202605",
-      "202604",
-      "202603",
-      "202602",
-      "202506",
-    ];
-    const repository = new InMemoryTransactionRepository(
-      periods.map((period) =>
-        transactionForPeriod("ING-" + period, period, "INGRESO", 100, "Ofrendas"),
-      ),
-    );
+  it("entrega las cantidades y montos de cada grupo dentro de la tendencia anual", async () => {
+    const overview = await new GetDashboardOverviewUseCase(
+      new InMemoryTransactionRepository([
+        transactionForPeriod("AUG-TITHE", "202608", "INGRESO", 300, "Diezmos"),
+        transactionForPeriod("AUG-OFFERING", "202608", "INGRESO", 200, "Ofrendas"),
+        transactionForPeriod("AUG-OTHER-1", "202608", "INGRESO", 40, "Campaña"),
+        transactionForPeriod("AUG-OTHER-2", "202608", "INGRESO", 60, "Campaña"),
+        transactionForPeriod("JUL-TITHE", "202607", "INGRESO", 100, "Diezmos"),
+      ]),
+    ).execute("202608");
 
-    const overview = await new GetDashboardOverviewUseCase(repository).execute("202606");
+    const augustTrend = overview.trend.find((point) => point.period === "202608");
+    const julyTrend = overview.trend.find((point) => point.period === "202607");
 
-    expect(overview.trend.map((summary) => summary.period)).toEqual([
-      "202507",
-      "202508",
-      "202509",
-      "202510",
-      "202511",
-      "202512",
-      "202601",
-      "202602",
-      "202603",
-      "202604",
-      "202605",
-      "202606",
-    ]);
-    expect(overview.trend.map((summary) => summary.cumulativeBalance)).toEqual([
-      100, 100, 100, 100, 100, 100, 100, 200, 300, 400, 500, 600,
-    ]);
-    expect(overview.availablePeriods).toEqual(periods);
+    expect(augustTrend).toMatchObject({
+      income: { CONTRIBUTIONS: 500, ALL: 600 },
+      incomeByGroup: {
+        DIEZMOS: { amount: 300, transactionCount: 1 },
+        OFRENDAS: { amount: 200, transactionCount: 1 },
+        OTROS: { amount: 100, transactionCount: 2 },
+      },
+    });
+    expect(julyTrend?.incomeByGroup.DIEZMOS).toEqual({ amount: 100, transactionCount: 1 });
   });
 
-  it("genera una tendencia diaria continua hasta el corte y reinicia su acumulado en cero", async () => {
+  it("genera una tendencia diaria continua y conserva el alcance de cada ingreso", async () => {
     const overview = await new GetDashboardOverviewUseCase(
       new InMemoryTransactionRepository([
         transactionForPeriod("ING-01", "202608", "INGRESO", 100, "Ofrendas", 2),
         transactionForPeriod("ING-02", "202608", "INGRESO", 50, "Diezmos", 2),
+        transactionForPeriod("ING-03", "202608", "INGRESO", 30, "Actividad", 3),
         transactionForPeriod("EGR-01", "202608", "EGRESO", 60, "Servicios", 4),
-        transactionForPeriod("ING-03", "202608", "INGRESO", 30, "Ofrendas", 6),
-        transactionForPeriod("EGR-02", "202608", "EGRESO", 10, "Ayuda social", 6),
       ]),
     ).execute("202608");
 
-    expect(overview.periodDailyTrend).toEqual([
-      { date: "2026-08-01", income: 0, expense: 0, netResult: 0, cumulativeNetResult: 0 },
-      {
-        date: "2026-08-02",
-        income: 150,
-        expense: 0,
-        netResult: 150,
-        cumulativeNetResult: 150,
-      },
-      {
-        date: "2026-08-03",
-        income: 0,
-        expense: 0,
-        netResult: 0,
-        cumulativeNetResult: 150,
-      },
-      {
-        date: "2026-08-04",
-        income: 0,
-        expense: 60,
-        netResult: -60,
-        cumulativeNetResult: 90,
-      },
-      {
-        date: "2026-08-05",
-        income: 0,
-        expense: 0,
-        netResult: 0,
-        cumulativeNetResult: 90,
-      },
-      {
-        date: "2026-08-06",
-        income: 30,
-        expense: 10,
-        netResult: 20,
-        cumulativeNetResult: 110,
-      },
-    ]);
-    expect(overview.summary).toMatchObject({ income: 180, expense: 70, netResult: 110 });
-  });
-
-  it("agrupa gastos no salariales en Otros y usa el período más reciente por defecto", async () => {
-    const categories = [
-      ["A", 600],
-      ["B", 500],
-      ["C", 400],
-      ["D", 300],
-      ["E", 200],
-      ["F", 100],
-    ] as const;
-    const repository = new InMemoryTransactionRepository([
-      transactionForPeriod("ING-08", "202608", "INGRESO", 1_000, "Ofrendas"),
-      ...categories.map(([category, amount]) =>
-        transactionForPeriod("E-" + category, "202608", "EGRESO", amount, category),
-      ),
-      transactionForPeriod("ING-07", "202607", "INGRESO", 900, "Ofrendas"),
-    ]);
-
-    const overview = await new GetDashboardOverviewUseCase(repository).execute("sin-periodo");
-
-    expect(overview.selectedPeriod).toBe("202608");
-    expect(overview.expenseCategories).toEqual([
-      { category: "A", amount: 600, transactionCount: 1, share: 600 / 2_100 },
-      { category: "B", amount: 500, transactionCount: 1, share: 500 / 2_100 },
-      { category: "C", amount: 400, transactionCount: 1, share: 400 / 2_100 },
-      { category: "D", amount: 300, transactionCount: 1, share: 300 / 2_100 },
-      { category: "E", amount: 200, transactionCount: 1, share: 200 / 2_100 },
-      { category: "Otros", amount: 100, transactionCount: 1, share: 100 / 2_100 },
-    ]);
-    expect(overview.expenseInsights).toEqual({
-      leadingCategory: { category: "A", amount: 600, transactionCount: 1, share: 600 / 2_100 },
-      topThreeShare: 1_500 / 2_100,
+    expect(overview.periodDailyTrend).toHaveLength(4);
+    expect(overview.periodDailyTrend[1]).toEqual({
+      date: "2026-08-02",
+      income: { CONTRIBUTIONS: 150, ALL: 150 },
+      incomeByGroup: { DIEZMOS: 50, OFRENDAS: 100, OTROS: 0 },
+      expense: 0,
+      netResult: { CONTRIBUTIONS: 150, ALL: 150 },
+      cumulativeNetResult: { CONTRIBUTIONS: 150, ALL: 150 },
+    });
+    expect(overview.periodDailyTrend[2]).toMatchObject({
+      income: { CONTRIBUTIONS: 0, ALL: 30 },
+      incomeByGroup: { DIEZMOS: 0, OFRENDAS: 0, OTROS: 30 },
+      cumulativeNetResult: { CONTRIBUTIONS: 150, ALL: 180 },
+    });
+    expect(overview.periodIncomeBehavior[2]).toEqual({
+      date: "2026-08-03",
+      cumulativeShare: { DIEZMOS: 1, OFRENDAS: 1, OTROS: 1 },
     });
   });
 
-  it("separa Salarios y Honorarios de los demás gastos sin alterar los totales", async () => {
-    const salary = transactionForPeriod(
-      "SAL-01",
-      "202608",
-      "EGRESO",
-      400,
-      "  SALÁRIOS & HONORARIOS  ",
-    );
-    const contributionBySubcategory = makeTransaction({
-      id: "OFR-01",
-      period: "202608",
-      date: new Date("2026-08-10T12:00:00.000Z"),
-      type: "INGRESO",
-      amount: 600,
-      category: "Donaciones",
-      subcategory: "Ofrenda",
-    });
+  it("compara el período más reciente hasta el último día real del mes anterior", async () => {
     const overview = await new GetDashboardOverviewUseCase(
       new InMemoryTransactionRepository([
-        transactionForPeriod("ING-01", "202608", "INGRESO", 1_000, "Diezmos"),
-        contributionBySubcategory,
-        salary,
-        transactionForPeriod("EGR-01", "202608", "EGRESO", 200, "Servicios"),
-        transactionForPeriod("EGR-02", "202608", "EGRESO", 100, "Alquiler"),
-        transactionForPeriod("EGR-03", "202608", "EGRESO", 50, "Salarios y Honorarios Extra"),
-        transactionForPeriod("JUL-01", "202607", "INGRESO", 300, "Ofrendas"),
+        transactionForPeriod("FEB-TITHE", "202602", "INGRESO", 100, "Diezmos", 28),
+        transactionForPeriod("FEB-LATE", "202602", "INGRESO", 50, "Ofrendas", 27),
+        transactionForPeriod("MAR-TITHE", "202603", "INGRESO", 150, "Diezmos", 31),
+        transactionForPeriod("MAR-EXPENSE", "202603", "EGRESO", 40, "Servicios", 31),
       ]),
-    ).execute("202608");
+    ).execute("202603");
 
-    expect(overview.summary?.expense).toBe(750);
-    expect(overview.accumulated).toEqual({ income: 1_900, expense: 750, balance: 1_150 });
-    expect(overview.expenseComposition).toEqual({
-      salariesAndFees: { amount: 400, transactionCount: 1, share: 400 / 750 },
-      otherExpenses: { amount: 350, transactionCount: 3, share: 350 / 750 },
+    expect(overview.comparison?.window).toEqual({
+      kind: "THROUGH_DAY",
+      previousPeriod: "202602",
+      throughDay: 28,
     });
-    expect(overview.expenseCategories.map((category) => category.category)).toEqual([
-      "Servicios",
-      "Alquiler",
-      "Salarios y Honorarios Extra",
-    ]);
-    expect(overview.expenseInsights?.topThreeShare).toBe(1);
-    expect(overview.contributionTrends.OFRENDAS.find((point) => point.period === "202607")).toEqual(
-      {
-        period: "202607",
-        amount: 300,
-        transactionCount: 1,
-      },
-    );
-    expect(overview.contributionTrends.OFRENDAS.find((point) => point.period === "202608")).toEqual(
-      {
-        period: "202608",
-        amount: 600,
-        transactionCount: 1,
-      },
-    );
-    expect(overview.contributionTrends.DIEZMOS.find((point) => point.period === "202608")).toEqual({
-      period: "202608",
-      amount: 1_000,
-      transactionCount: 1,
+    expect(overview.comparison?.income.CONTRIBUTIONS).toEqual({
+      previousValue: 150,
+      delta: 0,
+      rate: 0,
+      direction: "UNCHANGED",
     });
   });
 
-  it("marca la tasa de ahorro como no aplicable cuando el período no tiene ingresos", async () => {
+  it("compara meses históricos completos, atraviesa el cambio de año y conserva saldos negativos", async () => {
     const overview = await new GetDashboardOverviewUseCase(
+      new InMemoryTransactionRepository([
+        transactionForPeriod("DEC-EXPENSE", "202512", "EGRESO", 100, "Servicios", 28),
+        transactionForPeriod("JAN-EXPENSE", "202601", "EGRESO", 50, "Servicios", 2),
+        transactionForPeriod("FEB-INCOME", "202602", "INGRESO", 20, "Ofrendas", 1),
+      ]),
+    ).execute("202601");
+
+    expect(overview.comparison?.window).toEqual({ kind: "FULL_MONTH", previousPeriod: "202512" });
+    expect(overview.comparison?.netResult.CONTRIBUTIONS).toEqual({
+      previousValue: -100,
+      delta: 50,
+      rate: 0.5,
+      direction: "INCREASED",
+    });
+    expect(overview.accumulated?.balance).toEqual({ CONTRIBUTIONS: -150, ALL: -150 });
+    expect(overview.comparison?.accumulatedBalance.CONTRIBUTIONS).toEqual({
+      previousValue: -100,
+      delta: -50,
+      rate: -0.5,
+      direction: "DECREASED",
+    });
+    expect(overview.comparison?.savingsRate.CONTRIBUTIONS).toEqual({
+      currentValue: null,
+      previousValue: null,
+      delta: null,
+      direction: null,
+    });
+  });
+
+  it("no compara tasas sin ingresos y conserva estados vacíos", async () => {
+    const onlyExpenses = await new GetDashboardOverviewUseCase(
       new InMemoryTransactionRepository([
         transactionForPeriod("EGR-01", "202608", "EGRESO", 200, "Servicios"),
       ]),
     ).execute("202608");
-
-    expect(overview.summary).toMatchObject({
-      income: 0,
-      expense: 200,
-      netResult: -200,
-      savingsRate: null,
-    });
-    expect(overview.periodDailyTrend).toEqual([
-      {
-        date: "2026-08-01",
-        income: 0,
-        expense: 200,
-        netResult: -200,
-        cumulativeNetResult: -200,
-      },
-    ]);
-  });
-
-  it("devuelve un estado vacío cuando no existen transacciones válidas", async () => {
-    const overview = await new GetDashboardOverviewUseCase(
+    const empty = await new GetDashboardOverviewUseCase(
       new InMemoryTransactionRepository([], [invalidIssue]),
     ).execute();
 
-    expect(overview.selectedPeriod).toBeNull();
-    expect(overview.summary).toBeNull();
-    expect(overview.accumulated).toBeNull();
-    expect(overview.periodDailyTrend).toEqual([]);
-    expect(overview.trend).toEqual([]);
-    expect(overview.contributionTrends).toEqual({ OFRENDAS: [], DIEZMOS: [] });
-    expect(overview.expenseComposition).toBeNull();
-    expect(overview.dataCutoff).toBeNull();
-    expect(overview.dataQuality.invalidTransactionCount).toBe(1);
+    expect(onlyExpenses.summary).toMatchObject({
+      income: { CONTRIBUTIONS: 0, ALL: 0 },
+      expense: 200,
+      netResult: { CONTRIBUTIONS: -200, ALL: -200 },
+      savingsRate: { CONTRIBUTIONS: null, ALL: null },
+    });
+    expect(onlyExpenses.comparison?.income.CONTRIBUTIONS).toEqual({
+      previousValue: 0,
+      delta: 0,
+      rate: null,
+      direction: "UNCHANGED",
+    });
+    expect(onlyExpenses.comparison?.savingsRate.ALL).toEqual({
+      currentValue: null,
+      previousValue: null,
+      delta: null,
+      direction: null,
+    });
+    expect(empty).toMatchObject({
+      selectedPeriod: null,
+      summary: null,
+      accumulated: null,
+      comparison: null,
+      incomeBreakdown: null,
+      periodDailyTrend: [],
+      periodIncomeBehavior: [],
+      trend: [],
+      incomeCategories: { CONTRIBUTIONS: [], ALL: [] },
+      expenseComposition: null,
+      dataCutoff: null,
+    });
+    expect(empty.dataQuality.invalidTransactionCount).toBe(1);
   });
 });
