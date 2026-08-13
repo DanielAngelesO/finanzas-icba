@@ -1,4 +1,4 @@
-import type { Transaction } from "../../domain/transaction";
+import type { AccountFlow, Transaction } from "../../domain/transaction";
 import type { TransactionValidationIssue } from "../../domain/diagnostics";
 
 const reviewPeriods = [
@@ -19,7 +19,16 @@ const reviewPeriods = [
 const monthDate = (period: string, day: number): Date =>
   new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(4, 6)) - 1, day, 12));
 
-const createTransaction = (transaction: Transaction): Transaction => transaction;
+type ReviewTransaction = Omit<Transaction, "accountFlow" | "transferId"> & {
+  accountFlow?: AccountFlow;
+  transferId?: string | null;
+};
+
+const createTransaction = (transaction: ReviewTransaction): Transaction => ({
+  ...transaction,
+  accountFlow: transaction.accountFlow ?? (transaction.type === "EGRESO" ? "OUTFLOW" : "INFLOW"),
+  transferId: transaction.transferId ?? null,
+});
 
 const createPeriodTransactions = (period: string, index: number): Transaction[] => {
   const serviceReference = index === 4 || index === 8 ? "REV-SERVICIO-COMUN" : `REV-${period}-SERV`;
@@ -75,6 +84,44 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Yape",
       referenceOrReceipt: `REV-${period}-IN-03`,
       amount: 480 + index * 10,
+      status: "Confirmado",
+      period,
+      notes: null,
+    }),
+    createTransaction({
+      id: `REV-${period}-TRANSFER-OUT`,
+      date: monthDate(period, 19),
+      type: "TRANSFERENCIA",
+      accountFlow: "OUTFLOW",
+      account: "Cuenta corriente",
+      transferId: `REV-${period}-TRANSFER-01`,
+      category: "Transferencia interna",
+      subcategory: "Reposición de caja chica",
+      description: "Traslado a caja chica",
+      responsible: "Equipo de tesorería",
+      donorOrProvider: null,
+      paymentMethod: "Transferencia",
+      referenceOrReceipt: `REV-${period}-TRANSFER-01`,
+      amount: 360 + index * 10,
+      status: "Confirmado",
+      period,
+      notes: null,
+    }),
+    createTransaction({
+      id: `REV-${period}-TRANSFER-IN`,
+      date: monthDate(period, 19),
+      type: "TRANSFERENCIA",
+      accountFlow: "INFLOW",
+      account: "Caja chica",
+      transferId: `REV-${period}-TRANSFER-01`,
+      category: "Transferencia interna",
+      subcategory: "Reposición de caja chica",
+      description: "Traslado desde cuenta corriente",
+      responsible: "Equipo de tesorería",
+      donorOrProvider: null,
+      paymentMethod: "Transferencia",
+      referenceOrReceipt: `REV-${period}-TRANSFER-01`,
+      amount: 360 + index * 10,
       status: "Confirmado",
       period,
       notes: null,

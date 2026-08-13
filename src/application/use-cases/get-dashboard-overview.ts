@@ -1,5 +1,6 @@
 import type {
   DashboardAccumulatedSummary,
+  DashboardAccountPosition,
   DashboardCategorySummary,
   DashboardComparisonWindow,
   DashboardDailyTrendPoint,
@@ -21,7 +22,7 @@ import type {
   DashboardTrendPoint,
 } from "../../domain/dashboard";
 import { getIncomeGroup, normalizeCategory } from "../../domain/income-groups";
-import type { Transaction } from "../../domain/transaction";
+import { getTransactionAccountDelta, type Transaction } from "../../domain/transaction";
 import type { TransactionRepository } from "../ports/transaction-repository";
 
 const dashboardPeriodPattern = /^\d{6}$/;
@@ -29,6 +30,8 @@ const maximumTrendPeriods = 12;
 const maximumCategories = 5;
 const maximumRecentTransactions = 5;
 const salaryAndFeesCategory = "salarios y honorarios";
+
+const roundMoney = (amount: number): number => Math.round((amount + Number.EPSILON) * 100) / 100;
 
 const sortTransactionsByNewestFirst = (left: Transaction, right: Transaction): number =>
   right.date.getTime() - left.date.getTime() || right.id.localeCompare(left.id);
@@ -456,7 +459,33 @@ const getAccumulatedSummary = (transactions: Transaction[]): DashboardAccumulate
   return {
     income: financialValues.income,
     expense: financialValues.expense,
-    balance: financialValues.netResult,
+    balance: createIncomeScopeValues(
+      roundMoney(financialValues.netResult.CONTRIBUTIONS),
+      roundMoney(financialValues.netResult.ALL),
+    ),
+  };
+};
+
+const getAccountPosition = (transactions: Transaction[]): DashboardAccountPosition => {
+  const balanceByAccountInCents = new Map<string, number>();
+
+  transactions.forEach((transaction) => {
+    const current = balanceByAccountInCents.get(transaction.account) ?? 0;
+    const deltaInCents = Math.round(getTransactionAccountDelta(transaction) * 100);
+    balanceByAccountInCents.set(transaction.account, current + deltaInCents);
+  });
+
+  const accounts = [...balanceByAccountInCents.entries()]
+    .map(([account, balanceInCents]) => ({ account, balance: balanceInCents / 100 }))
+    .sort(
+      (left, right) =>
+        right.balance - left.balance || left.account.localeCompare(right.account, "es-PE"),
+    );
+
+  return {
+    accounts,
+    total:
+      [...balanceByAccountInCents.values()].reduce((total, balance) => total + balance, 0) / 100,
   };
 };
 
@@ -639,6 +668,7 @@ export class GetDashboardOverviewUseCase {
         selectedPeriod: null,
         summary: null,
         accumulated: null,
+        accountPosition: null,
         comparison: null,
         incomeBreakdown: null,
         periodDailyTrend: [],
@@ -660,9 +690,11 @@ export class GetDashboardOverviewUseCase {
     }
 
     const summary = createPeriodSummary(selectedPeriod, selectedTransactions);
-    const accumulated = getAccumulatedSummary(
-      inspection.transactions.filter((transaction) => transaction.period <= selectedPeriod),
+    const accumulatedTransactions = inspection.transactions.filter(
+      (transaction) => transaction.period <= selectedPeriod,
     );
+    const accumulated = getAccumulatedSummary(accumulatedTransactions);
+    const accountPosition = getAccountPosition(accumulatedTransactions);
     const dataCutoff = getDataCutoff(selectedTransactions);
     const incomeBreakdown = getIncomeBreakdown(selectedTransactions);
     const periodDailyTrend = getPeriodDailyTrend(selectedPeriod, selectedTransactions, dataCutoff);
@@ -678,6 +710,7 @@ export class GetDashboardOverviewUseCase {
       selectedPeriod,
       summary,
       accumulated,
+      accountPosition,
       comparison: getPeriodComparison(
         selectedPeriod,
         availablePeriods[0] ?? null,

@@ -4,6 +4,7 @@ export interface TransactionColumnMapping {
   id: string;
   date: string;
   type: string;
+  transferId: string;
   account: string;
   category: string;
   subcategory: string;
@@ -37,6 +38,7 @@ export const transactionColumnMapping: TransactionColumnMapping = {
   id: "ID",
   date: "Fecha",
   type: "Tipo Transacción",
+  transferId: "Id Transaccion",
   account: "Cuenta",
   category: "Categoría",
   subcategory: "Subcategoría",

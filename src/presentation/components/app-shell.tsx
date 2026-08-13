@@ -24,6 +24,14 @@ function ReceiptIcon() {
   );
 }
 
+function OverviewIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M3.25 2.5A1.75 1.75 0 0 0 1.5 4.25v3.5A1.75 1.75 0 0 0 3.25 9.5h3.5A1.75 1.75 0 0 0 8.5 7.75v-3.5A1.75 1.75 0 0 0 6.75 2.5h-3.5Zm10 0a1.75 1.75 0 0 0-1.75 1.75v3.5a1.75 1.75 0 0 0 1.75 1.75h3.5a1.75 1.75 0 0 0 1.75-1.75v-3.5a1.75 1.75 0 0 0-1.75-1.75h-3.5Zm-10 8A1.75 1.75 0 0 0 1.5 12.25v3.5a1.75 1.75 0 0 0 1.75 1.75h3.5a1.75 1.75 0 0 0 1.75-1.75v-3.5a1.75 1.75 0 0 0-1.75-1.75h-3.5Zm10 0a1.75 1.75 0 0 0-1.75 1.75v3.5a1.75 1.75 0 0 0 1.75 1.75h3.5a1.75 1.75 0 0 0 1.75-1.75v-3.5a1.75 1.75 0 0 0-1.75-1.75h-3.5Z" />
+    </svg>
+  );
+}
+
 function ChartIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -166,6 +174,10 @@ export function AppShell() {
         <p className="sidebar-section-label">Principal</p>
         <NavLink className="sidebar-link" to="/" end onClick={closeSidebar}>
           <HomeIcon />
+          Inicio
+        </NavLink>
+        <NavLink className="sidebar-link" to="/resumen" onClick={closeSidebar}>
+          <OverviewIcon />
           Resumen
         </NavLink>
         <NavLink className="sidebar-link" to="/movimientos" onClick={closeSidebar}>

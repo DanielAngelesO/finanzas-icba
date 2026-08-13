@@ -12,19 +12,42 @@ import {
 const getTransactionConcept = (transaction: Transaction): string =>
   transaction.description ?? transaction.category;
 
-const getTransactionTypeLabel = (transaction: Transaction): string =>
-  transaction.type === "INGRESO" ? "Ingreso" : "Egreso";
+const getTransactionTypeLabel = (transaction: Transaction): string => {
+  if (transaction.type === "INGRESO") return "Ingreso";
+  if (transaction.type === "EGRESO") return "Egreso";
+  return "Transferencia";
+};
 
 const getSignedAmount = (transaction: Transaction): string =>
-  `${transaction.type === "INGRESO" ? "+" : "−"}${formatMoney(transaction.amount)}`;
+  `${transaction.accountFlow === "INFLOW" ? "+" : "−"}${formatMoney(transaction.amount)}`;
+
+const getAccountFlowLabel = (transaction: Transaction): string =>
+  transaction.accountFlow === "INFLOW" ? "Entrada" : "Salida";
+
+const getTypeBadgeClass = (transaction: Transaction): string => {
+  if (transaction.type === "INGRESO") return "type-ingreso";
+  if (transaction.type === "EGRESO") return "type-egreso";
+  return "type-transferencia";
+};
+
+const getAmountToneClass = (transaction: Transaction): string => {
+  if (transaction.type === "TRANSFERENCIA") return "amount-neutral";
+  return transaction.accountFlow === "INFLOW" ? "amount-positive" : "amount-negative";
+};
 
 const optionalValue = (value: string | null): string => value ?? "Sin información";
 
 function TransactionTypeBadge({ transaction }: { transaction: Transaction }) {
   const label = getTransactionTypeLabel(transaction);
   return (
-    <span className={transaction.type === "INGRESO" ? "type-ingreso" : "type-egreso"}>
-      <span aria-hidden="true">{transaction.type === "INGRESO" ? "↑" : "↓"}</span>
+    <span className={getTypeBadgeClass(transaction)} aria-label={label}>
+      <span aria-hidden="true">
+        {transaction.type === "TRANSFERENCIA"
+          ? "↔"
+          : transaction.accountFlow === "INFLOW"
+            ? "↑"
+            : "↓"}
+      </span>
       {label}
     </span>
   );
@@ -33,11 +56,8 @@ function TransactionTypeBadge({ transaction }: { transaction: Transaction }) {
 function TransactionAmount({ transaction }: { transaction: Transaction }) {
   return (
     <span
-      className={
-        "tabular-nums font-semibold " +
-        (transaction.type === "INGRESO" ? "amount-positive" : "amount-negative")
-      }
-      aria-label={`${getTransactionTypeLabel(transaction)} de ${formatMoney(transaction.amount)}`}
+      className={"tabular-nums font-semibold " + getAmountToneClass(transaction)}
+      aria-label={`${getTransactionTypeLabel(transaction)} de ${formatMoney(transaction.amount)} · ${getAccountFlowLabel(transaction)}`}
     >
       {getSignedAmount(transaction)}
     </span>
@@ -131,7 +151,7 @@ export function TransactionResults({
               <th scope="col" className="text-right">
                 Monto
               </th>
-              <th scope="col" className="text-right">
+              <th scope="col">
                 Detalle
               </th>
             </tr>
@@ -169,7 +189,7 @@ export function TransactionResults({
                       onClick={(event) => onViewDetails(transaction, event.currentTarget)}
                       aria-label={`Ver detalle de ${concept}`}
                     >
-                      Ver detalle
+                      Ver
                     </button>
                   </td>
                 </tr>
@@ -200,8 +220,16 @@ const getDetailGroups = (transaction: Transaction): DetailGroup[] => [
       { label: "Fecha", value: formatDate(transaction.date) },
       {
         label: "Tipo",
-        value: `${transaction.type === "INGRESO" ? "↑" : "↓"} ${getTransactionTypeLabel(transaction)}`,
+        value:
+          `${transaction.type === "TRANSFERENCIA" ? "↔" : transaction.accountFlow === "INFLOW" ? "↑" : "↓"} ` +
+          getTransactionTypeLabel(transaction),
       },
+      ...(transaction.type === "TRANSFERENCIA"
+        ? [
+          { label: "Flujo en cuenta", value: getAccountFlowLabel(transaction) },
+          { label: "Id Transaccion", value: optionalValue(transaction.transferId) },
+        ]
+        : []),
       { label: "Monto", value: getSignedAmount(transaction) },
       { label: "Estado", value: transaction.status },
       { label: "Período", value: formatPeriod(transaction.period) },

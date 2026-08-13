@@ -59,6 +59,16 @@ export interface DashboardAccumulatedSummary {
   balance: DashboardIncomeScopeValues;
 }
 
+export interface DashboardAccountBalance {
+  account: string;
+  balance: number;
+}
+
+export interface DashboardAccountPosition {
+  accounts: DashboardAccountBalance[];
+  total: number;
+}
+
 export interface DashboardCategorySummary {
   category: string;
   amount: number;
@@ -125,6 +135,7 @@ export interface DashboardOverview {
   selectedPeriod: string | null;
   summary: DashboardPeriodSummary | null;
   accumulated: DashboardAccumulatedSummary | null;
+  accountPosition: DashboardAccountPosition | null;
   comparison: DashboardPeriodComparison | null;
   incomeBreakdown: DashboardIncomeBreakdown | null;
   periodDailyTrend: DashboardDailyTrendPoint[];

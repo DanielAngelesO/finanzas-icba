@@ -28,6 +28,34 @@ const transactionForPeriod = (
     ),
   });
 
+const transferForPeriod = (
+  id: string,
+  period: string,
+  account: string,
+  accountFlow: "INFLOW" | "OUTFLOW",
+  amount: number,
+  transferId: string,
+  day = 1,
+) =>
+  makeTransaction({
+    id,
+    period,
+    type: "TRANSFERENCIA",
+    account,
+    accountFlow,
+    transferId,
+    amount,
+    category: "Transferencia interna",
+    date: new Date(
+      period.slice(0, 4) +
+        "-" +
+        period.slice(4) +
+        "-" +
+        String(day).padStart(2, "0") +
+        "T12:00:00.000Z",
+    ),
+  });
+
 const invalidIssue: TransactionValidationIssue = {
   code: "INVALID_AMOUNT",
   severity: "error",
@@ -37,6 +65,70 @@ const invalidIssue: TransactionValidationIssue = {
 };
 
 describe("GetDashboardOverviewUseCase", () => {
+  it("calcula el saldo histórico por cuenta e ignora transferencias en el resultado financiero", async () => {
+    const overview = await new GetDashboardOverviewUseCase(
+      new InMemoryTransactionRepository([
+        transactionForPeriod("JUL-INCOME", "202607", "INGRESO", 100, "Ofrendas", 2),
+        makeTransaction({
+          id: "JUL-ZERO-INCOME",
+          period: "202607",
+          date: new Date("2026-07-03T12:00:00.000Z"),
+          type: "INGRESO",
+          account: "Cuenta sin saldo",
+          amount: 20,
+          category: "Ofrendas",
+        }),
+        makeTransaction({
+          id: "JUL-ZERO-EXPENSE",
+          period: "202607",
+          date: new Date("2026-07-04T12:00:00.000Z"),
+          type: "EGRESO",
+          account: "Cuenta sin saldo",
+          amount: 20,
+          category: "Servicios",
+        }),
+        transferForPeriod("AUG-TRANSFER-OUT", "202608", "Caja", "OUTFLOW", 40, "TRANSFER-001", 3),
+        transferForPeriod("AUG-TRANSFER-IN", "202608", "Banco", "INFLOW", 40, "TRANSFER-001", 3),
+        makeTransaction({
+          id: "AUG-EXPENSE-BANK",
+          period: "202608",
+          type: "EGRESO",
+          account: "Banco",
+          amount: 10,
+          category: "Servicios",
+          date: new Date("2026-08-04T12:00:00.000Z"),
+        }),
+        makeTransaction({
+          id: "AUG-EXPENSE-CASH",
+          period: "202608",
+          type: "EGRESO",
+          account: "Caja chica",
+          amount: 5,
+          category: "Materiales",
+          date: new Date("2026-08-05T12:00:00.000Z"),
+        }),
+        transactionForPeriod("SEP-INCOME", "202609", "INGRESO", 999, "Ofrendas", 2),
+      ]),
+    ).execute("202608");
+
+    expect(overview.summary).toMatchObject({
+      income: { CONTRIBUTIONS: 0, ALL: 0 },
+      expense: 15,
+      netResult: { CONTRIBUTIONS: -15, ALL: -15 },
+    });
+    expect(overview.accumulated?.balance).toEqual({ CONTRIBUTIONS: 85, ALL: 85 });
+    expect(overview.accountPosition).toEqual({
+      accounts: [
+        { account: "Caja", balance: 60 },
+        { account: "Banco", balance: 30 },
+        { account: "Cuenta sin saldo", balance: 0 },
+        { account: "Caja chica", balance: -5 },
+      ],
+      total: 85,
+    });
+    expect(overview.accountPosition?.total).toBe(overview.accumulated?.balance.ALL);
+  });
+
   it("resume aportes, otros y total con métricas comparables por alcance", async () => {
     const overview = await new GetDashboardOverviewUseCase(
       new InMemoryTransactionRepository([

@@ -2,6 +2,23 @@ import { Link } from "react-router-dom";
 import type { Transaction } from "../../domain/transaction";
 import { formatCompactDate, formatMoney } from "../formatters";
 
+const getTransactionTypeLabel = (transaction: Transaction): string => {
+  if (transaction.type === "INGRESO") return "Ingreso";
+  if (transaction.type === "EGRESO") return "Egreso";
+  return "Transferencia";
+};
+
+const getTypeBadgeClass = (transaction: Transaction): string => {
+  if (transaction.type === "INGRESO") return "type-ingreso";
+  if (transaction.type === "EGRESO") return "type-egreso";
+  return "type-transferencia";
+};
+
+const getAmountToneClass = (transaction: Transaction): string => {
+  if (transaction.type === "TRANSFERENCIA") return "amount-neutral";
+  return transaction.accountFlow === "INFLOW" ? "amount-positive" : "amount-negative";
+};
+
 export function RecentTransactionList({
   transactions,
   movementsHref,
@@ -31,10 +48,14 @@ export function RecentTransactionList({
           {transactions.map((transaction) => (
             <li className="flex items-center gap-3 py-3" key={transaction.id}>
               <span
-                className={transaction.type === "INGRESO" ? "type-ingreso" : "type-egreso"}
-                aria-label={transaction.type === "INGRESO" ? "Ingreso" : "Egreso"}
+                className={getTypeBadgeClass(transaction)}
+                aria-label={getTransactionTypeLabel(transaction)}
               >
-                {transaction.type === "INGRESO" ? "↑" : "↓"}
+                {transaction.type === "TRANSFERENCIA"
+                  ? "↔"
+                  : transaction.accountFlow === "INFLOW"
+                    ? "↑"
+                    : "↓"}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-slate-200">
@@ -47,11 +68,10 @@ export function RecentTransactionList({
               </div>
               <span
                 className={
-                  "shrink-0 text-sm font-semibold tabular-nums " +
-                  (transaction.type === "INGRESO" ? "amount-positive" : "amount-negative")
+                  "shrink-0 text-sm font-semibold tabular-nums " + getAmountToneClass(transaction)
                 }
               >
-                {transaction.type === "INGRESO" ? "+" : "−"}
+                {transaction.accountFlow === "INFLOW" ? "+" : "−"}
                 {formatMoney(transaction.amount)}
               </span>
             </li>

@@ -34,7 +34,7 @@ npm run dev:review
 Este comando levanta la aplicación únicamente en `127.0.0.1:5173`, inicia una identidad local
 autenticada y carga datos sintéticos versionados de septiembre de 2025 a agosto de 2026. El aviso
 visible **Modo revisión local** confirma que Google Sheets no se consulta. La fuente de datos aparece
-como **Memoria** y contiene suficientes ingresos, egresos, filtros, tendencias, paginación y señales
+como **Memoria** y contiene suficientes ingresos, egresos, transferencias emparejadas, filtros, tendencias, paginación y señales
 de revisión para recorrer las pantallas.
 
 El modo revisión solo está habilitado durante `vite dev`; no se puede generar ni desplegar con
@@ -79,13 +79,19 @@ Todos los valores `VITE_*` son visibles desde el navegador y no son secretos. Nu
 | `VITE_ALLOWED_EMAILS`                                   | Correos separados por coma para la interfaz  |
 | `VITE_ACTIVE_YEAR`                                      | Año visible en diagnóstico; opcional         |
 
-La hoja debe contener los encabezados definidos en `src/config/google-sheets.ts`. El orden puede variar. Son obligatorios ID, Fecha, Tipo Transacción, Cuenta, Categoría, Responsable, Método de Pago, Monto, Estado y Período. `Descripción` es opcional.
+La hoja debe contener los encabezados definidos en `src/config/google-sheets.ts`; el orden puede variar. Son obligatorios `ID`, `Fecha`, `Tipo Transacción`, `Cuenta`, `Categoría`, `Responsable`, `Método de Pago`, `Monto`, `Estado` y `Período`. `Descripción`, `Subcategoría`, `Donante / Proveedor`, `Referencia / Comprobante` y `Notas` son opcionales.
+
+### Transferencias entre cuentas
+
+Use `Transferencia` como valor de `Tipo Transacción` y añada la columna condicional `Id Transaccion`. Cada traslado requiere exactamente dos filas con IDs de fila distintos: el mismo `Id Transaccion`, el mismo período, cuentas distintas y montos iguales al centavo. Registre el origen con monto negativo y el destino con monto positivo. Las fechas pueden diferir dentro del período.
+
+Las transferencias válidas aparecen en Movimientos y modifican el saldo por cuenta, pero no se cuentan como ingreso, egreso, resultado, tasa de ahorro ni tendencia financiera. Si falta la columna en una hoja sin transferencias, la carga continúa normalmente. Si una transferencia no tiene ID, pareja o coherencia, se excluye completo el grupo y sus filas aparecen en Calidad de datos.
 
 ## Pantallas
 
-- `/`: resumen financiero del período más reciente, con selector `?period=YYYYMM`, seis indicadores y análisis diario hasta la fecha de corte: saldo neto y acumulado del período, e ingresos frente a egresos. Luego presenta composición de ingresos, análisis ejecutivo de egresos, tendencias de doce meses y actividad reciente. El saldo acumulado diario parte de cero; el saldo acumulado anual conserva todo el historial. Los egresos separan `Salarios y Honorarios` de las demás categorías; el ranking detallado excluye esa categoría.
+- `/`: vista ejecutiva del período más reciente, con fecha de corte, selector compacto `?period=YYYYMM` y filtro de aportes. Presenta resultado, ingresos, egresos, saldo acumulado y el saldo por cuenta histórico a la fecha de corte. Este último incluye ingresos, egresos y transferencias, parte de cero y no cambia al filtrar solo aportes. A continuación muestra el pulso financiero de doce meses y el acceso al resumen detallado.
 - `/gastos`: análisis de egresos por rango móvil, cuenta, categoría, subcategoría, proveedor, responsable, método y estado. Incluye comparación con el período anterior equivalente, trazabilidad de comprobantes, concentración, señales conservadoras para revisión y detalle paginado. No sustituye un presupuesto, una conciliación ni una auditoría.
-- `/movimientos`: consulta de operaciones por período, tipo o ID.
+- `/movimientos`: consulta de operaciones por período, tipo, ID o `Id Transaccion`.
 - `/control/calidad`: conteos de validación y problemas por fila.
 - `/control/fuente`: conexión y metadatos no sensibles de la fuente.
 
@@ -101,8 +107,8 @@ Si aparece **Sin configurar**, revise `.env.local`. Para **403**, comparta el ar
 
 ## Datos de prueba seguros
 
-Para preparar una validación, entregue un CSV/TSV anonimizado con los 15 encabezados y 10–20 filas representativas, junto con el nombre de pestaña, filas, locale y separador decimal. No comparta datos reales de donantes/proveedores ni credenciales.
+Para preparar una validación, entregue un CSV/TSV anonimizado con los encabezados configurados y 10–20 filas representativas, junto con el nombre de pestaña, filas, locale y separador decimal. Incluya `Id Transaccion` si existen transferencias. No comparta datos reales de donantes/proveedores ni credenciales.
 
 ## Límites de esta etapa
 
-No hay escritura en Sheets, presupuestos, conciliación bancaria, saldos contables, backend, Supabase/PostgreSQL ni administración de usuarios. La cobertura documental de `/gastos` verifica que existe una referencia registrada, no la validez del comprobante. La interfaz seguirá funcionando como diagnóstico aunque Google no esté configurado; la conexión real requiere las variables locales y permisos de cada usuario.
+No hay escritura en Sheets, presupuestos, conciliación bancaria, saldos contables certificados, backend, Supabase/PostgreSQL ni administración de usuarios. El saldo por cuenta es un cálculo derivado del historial válido, no una conciliación bancaria. La cobertura documental de `/gastos` verifica que existe una referencia registrada, no la validez del comprobante. La interfaz seguirá funcionando como diagnóstico aunque Google no esté configurado; la conexión real requiere las variables locales y permisos de cada usuario.

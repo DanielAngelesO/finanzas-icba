@@ -36,6 +36,8 @@ export type ValidationIssueCode =
   | "INVALID_PERIOD"
   | "DERIVED_PERIOD"
   | "SIGN_CONVENTION"
+  | "MISSING_TRANSFER_ID"
+  | "INVALID_TRANSFER_PAIR"
   | "INVALID_REQUIRED_VALUE";
 
 export interface TransactionValidationIssue {

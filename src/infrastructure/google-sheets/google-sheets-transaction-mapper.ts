@@ -5,6 +5,7 @@ import type {
 } from "../../domain/diagnostics";
 import {
   transactionSchema,
+  type AccountFlow,
   type Transaction,
   type TransactionType,
 } from "../../domain/transaction";
@@ -33,8 +34,20 @@ const optionalKeys = [
 type MappingKey = keyof GoogleSheetsDataSourceConfig["columnMapping"];
 
 interface Candidate {
-  transaction: Transaction;
+  account: string | null;
+  accountFlow: AccountFlow | null;
+  amount: number | null;
   issues: TransactionValidationIssue[];
+  period: string | null;
+  rowNumber: number;
+  transaction: Transaction | null;
+  transferId: string | null;
+  type: TransactionType | null;
+}
+
+interface ParsedAmount {
+  amount: number;
+  rawAmount: number;
 }
 
 const normalizeHeader = (value: GoogleCell | undefined): string =>
@@ -94,12 +107,19 @@ const parseType = (value: GoogleCell | undefined): TransactionType | null => {
     .toUpperCase();
   if (normalized === "INGRESO") return "INGRESO";
   if (normalized === "EGRESO" || normalized === "GASTO") return "EGRESO";
+  if (normalized === "TRANSFERENCIA") return "TRANSFERENCIA";
   return null;
 };
 
-const parseAmount = (value: GoogleCell | undefined, decimalSeparator: "." | ","): number | null => {
-  if (typeof value === "number")
-    return Number.isFinite(value) && value !== 0 ? Math.abs(value) : null;
+const parseAmount = (
+  value: GoogleCell | undefined,
+  decimalSeparator: "." | ",",
+): ParsedAmount | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value !== 0
+      ? { amount: Math.abs(value), rawAmount: value }
+      : null;
+  }
   const text = normalizeText(value);
   if (!text) return null;
   const cleaned = text.replace(/^S\/\s*/i, "").replace(/\s/g, "");
@@ -108,12 +128,113 @@ const parseAmount = (value: GoogleCell | undefined, decimalSeparator: "." | ",")
       ? cleaned.replace(/,/g, "")
       : cleaned.replace(/\./g, "").replace(",", ".");
   if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
-  const amount = Number(normalized);
-  return Number.isFinite(amount) && amount !== 0 ? Math.abs(amount) : null;
+  const rawAmount = Number(normalized);
+  return Number.isFinite(rawAmount) && rawAmount !== 0
+    ? { amount: Math.abs(rawAmount), rawAmount }
+    : null;
 };
 
 const derivePeriod = (date: Date): string =>
   `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+
+const getAccountFlow = (type: TransactionType, rawAmount: number): AccountFlow => {
+  if (type === "EGRESO") return "OUTFLOW";
+  if (type === "INGRESO") return "INFLOW";
+  return rawAmount < 0 ? "OUTFLOW" : "INFLOW";
+};
+
+const hasErrors = (issues: TransactionValidationIssue[]): boolean =>
+  issues.some((entry) => entry.severity === "error");
+
+const getAmountInCents = (amount: number): number => Math.round(amount * 100);
+
+const addTransferPairIssue = (
+  candidates: Candidate[],
+  transferId: string,
+  reason: string,
+): void => {
+  candidates.forEach((candidate) => {
+    candidate.issues.push(
+      issue(
+        "INVALID_TRANSFER_PAIR",
+        "error",
+        `La transferencia ${transferId} no forma un par válido: ${reason}.`,
+        candidate.rowNumber,
+        "Id Transaccion",
+      ),
+    );
+  });
+};
+
+const validateTransferPairs = (candidates: Candidate[]): void => {
+  const byTransferId = new Map<string, Candidate[]>();
+
+  candidates.forEach((candidate) => {
+    if (candidate.type !== "TRANSFERENCIA") return;
+    if (!candidate.transferId) {
+      candidate.issues.push(
+        issue(
+          "MISSING_TRANSFER_ID",
+          "error",
+          "Las transferencias deben registrar Id Transaccion para vincular origen y destino.",
+          candidate.rowNumber,
+          "Id Transaccion",
+        ),
+      );
+      return;
+    }
+    const group = byTransferId.get(candidate.transferId) ?? [];
+    group.push(candidate);
+    byTransferId.set(candidate.transferId, group);
+  });
+
+  byTransferId.forEach((group, transferId) => {
+    if (group.length !== 2) {
+      addTransferPairIssue(group, transferId, "debe contener exactamente dos filas");
+      return;
+    }
+
+    const originOrDestination = group[0];
+    const counterpart = group[1];
+    if (!originOrDestination || !counterpart) return;
+
+    if (hasErrors(originOrDestination.issues) || hasErrors(counterpart.issues)) {
+      addTransferPairIssue(group, transferId, "una de sus filas contiene datos inválidos");
+      return;
+    }
+    if (
+      originOrDestination.accountFlow === null ||
+      counterpart.accountFlow === null ||
+      originOrDestination.accountFlow === counterpart.accountFlow
+    ) {
+      addTransferPairIssue(group, transferId, "requiere una salida y una entrada");
+      return;
+    }
+    if (
+      originOrDestination.amount === null ||
+      counterpart.amount === null ||
+      getAmountInCents(originOrDestination.amount) !== getAmountInCents(counterpart.amount)
+    ) {
+      addTransferPairIssue(group, transferId, "los montos deben coincidir al centavo");
+      return;
+    }
+    if (
+      !originOrDestination.account ||
+      !counterpart.account ||
+      originOrDestination.account === counterpart.account
+    ) {
+      addTransferPairIssue(group, transferId, "origen y destino deben ser cuentas distintas");
+      return;
+    }
+    if (
+      !originOrDestination.period ||
+      !counterpart.period ||
+      originOrDestination.period !== counterpart.period
+    ) {
+      addTransferPairIssue(group, transferId, "ambas filas deben pertenecer al mismo período");
+    }
+  });
+};
 
 export class GoogleSheetsTransactionMapper {
   public constructor(private readonly config: GoogleSheetsDataSourceConfig) {}
@@ -188,7 +309,6 @@ export class GoogleSheetsTransactionMapper {
       .filter(([, count]) => count > 1)
       .map(([id]) => id);
     const candidates: Candidate[] = [];
-    let invalidTransactionCount = 0;
     values.slice(this.config.firstDataRow - 1).forEach((row, index) => {
       if (!isRealRow(row)) return;
       const rowNumber = this.config.firstDataRow + index;
@@ -201,10 +321,18 @@ export class GoogleSheetsTransactionMapper {
       const date = parseDate(read("date"));
       const type = parseType(read("type"));
       const amountCell = read("amount");
-      const amount = parseAmount(amountCell, this.config.decimalSeparator);
+      const parsedAmount = parseAmount(amountCell, this.config.decimalSeparator);
       const periodValue = normalizeText(read("period"));
       const period =
         periodValue && /^\d{6}$/.test(periodValue) ? periodValue : date ? derivePeriod(date) : null;
+      const account = normalizeText(read("account"));
+      const category = normalizeText(read("category"));
+      const responsible = normalizeText(read("responsible"));
+      const paymentMethod = normalizeText(read("paymentMethod"));
+      const status = normalizeText(read("status"));
+      const transferId = type === "TRANSFERENCIA" ? normalizeText(read("transferId")) : null;
+      const accountFlow =
+        type && parsedAmount ? getAccountFlow(type, parsedAmount.rawAmount) : null;
 
       if (!id)
         rowIssues.push(issue("INVALID_ID", "error", "El ID es obligatorio.", rowNumber, "ID"));
@@ -234,12 +362,12 @@ export class GoogleSheetsTransactionMapper {
           issue(
             "INVALID_TYPE",
             "error",
-            "El tipo debe ser ingreso, egreso o gasto.",
+            "El tipo debe ser ingreso, egreso, gasto o transferencia.",
             rowNumber,
             "Tipo Transacción",
           ),
         );
-      if (!amount)
+      if (!parsedAmount)
         rowIssues.push(
           issue(
             "INVALID_AMOUNT",
@@ -271,7 +399,7 @@ export class GoogleSheetsTransactionMapper {
           ),
         );
       }
-      if (typeof amountCell === "number" && type) {
+      if (typeof amountCell === "number" && type && type !== "TRANSFERENCIA") {
         if ((type === "EGRESO" && amountCell > 0) || (type === "INGRESO" && amountCell < 0)) {
           rowIssues.push(
             issue(
@@ -299,56 +427,82 @@ export class GoogleSheetsTransactionMapper {
           );
         }
       });
-      if (
-        rowIssues.some((entry) => entry.severity === "error") ||
-        !id ||
-        !date ||
-        !type ||
-        !amount ||
-        !period
-      ) {
-        issues.push(...rowIssues);
-        invalidTransactionCount += 1;
-        return;
-      }
-      const parsed = transactionSchema.safeParse({
-        id,
-        date,
-        type,
-        account: normalizeText(read("account")),
-        category: normalizeText(read("category")),
-        subcategory: normalizeText(read("subcategory")),
-        description: normalizeText(read("description")),
-        responsible: normalizeText(read("responsible")),
-        donorOrProvider: normalizeText(read("donorOrProvider")),
-        paymentMethod: normalizeText(read("paymentMethod")),
-        referenceOrReceipt: normalizeText(read("referenceOrReceipt")),
-        amount,
-        status: normalizeText(read("status")),
+
+      const candidate: Candidate = {
+        account,
+        accountFlow,
+        amount: parsedAmount?.amount ?? null,
+        issues: rowIssues,
         period,
-        notes: normalizeText(read("notes")),
-      });
-      if (!parsed.success) {
-        issues.push(
-          issue(
-            "INVALID_REQUIRED_VALUE",
-            "error",
-            "La fila no cumple el modelo de transacción.",
-            rowNumber,
-            null,
-          ),
-        );
-        invalidTransactionCount += 1;
-        return;
+        rowNumber,
+        transaction: null,
+        transferId,
+        type,
+      };
+
+      if (
+        !hasErrors(rowIssues) &&
+        id &&
+        date &&
+        type &&
+        parsedAmount &&
+        accountFlow &&
+        account &&
+        category &&
+        responsible &&
+        paymentMethod &&
+        status &&
+        period
+      ) {
+        const parsed = transactionSchema.safeParse({
+          id,
+          date,
+          type,
+          accountFlow,
+          account,
+          transferId,
+          category,
+          subcategory: normalizeText(read("subcategory")),
+          description: normalizeText(read("description")),
+          responsible,
+          donorOrProvider: normalizeText(read("donorOrProvider")),
+          paymentMethod,
+          referenceOrReceipt: normalizeText(read("referenceOrReceipt")),
+          amount: parsedAmount.amount,
+          status,
+          period,
+          notes: normalizeText(read("notes")),
+        });
+        if (parsed.success) {
+          candidate.transaction = parsed.data;
+        } else {
+          candidate.issues.push(
+            issue(
+              "INVALID_REQUIRED_VALUE",
+              "error",
+              "La fila no cumple el modelo de transacción.",
+              rowNumber,
+              null,
+            ),
+          );
+        }
       }
-      candidates.push({ transaction: parsed.data, issues: rowIssues });
+
+      candidates.push(candidate);
     });
+
+    validateTransferPairs(candidates);
 
     const transactions: Transaction[] = [];
     candidates.forEach((candidate) => {
       issues.push(...candidate.issues);
-      transactions.push(candidate.transaction);
+      if (candidate.transaction && !hasErrors(candidate.issues)) {
+        transactions.push(candidate.transaction);
+      }
     });
+    const invalidTransactionCount = candidates.filter(
+      (candidate) => !candidate.transaction || hasErrors(candidate.issues),
+    ).length;
 
     return {
       transactions,

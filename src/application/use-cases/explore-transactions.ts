@@ -89,6 +89,7 @@ const matchesSearch = (transaction: Transaction, search: string): boolean => {
     transaction.responsible,
     transaction.donorOrProvider,
     transaction.referenceOrReceipt,
+    transaction.transferId,
   ].some((value) => value !== null && normalizeSearchText(value).includes(search));
 };
 

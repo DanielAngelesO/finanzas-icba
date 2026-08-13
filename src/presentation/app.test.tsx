@@ -117,11 +117,327 @@ describe("navegación principal", () => {
     expect(await screen.findByRole("heading", { name: "Movimientos" })).toBeInTheDocument();
   });
 
-  it("lleva una sesión autenticada al Resumen desde la ruta de acceso", async () => {
+  it("lleva una sesión autenticada a Inicio desde la ruta de acceso", async () => {
     renderApp("/ingresar");
 
-    expect(await screen.findByRole("heading", { name: "Resumen financiero" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Inicio" })).toBeInTheDocument();
     expect(screen.getByText(/^Versión v\d+\.\d+\.\d+ · /)).toBeInTheDocument();
+  });
+
+  it("presenta una entrada ejecutiva y conserva Resumen como opción separada", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+
+    expect(await screen.findByRole("heading", { name: "Inicio" })).toBeInTheDocument();
+    const result = await screen.findByRole("region", { name: "Resultado financiero" });
+    expect(within(result).getByRole("heading", { name: "Superávit" })).toBeInTheDocument();
+    const indicators = screen.getByRole("region", { name: "Indicadores complementarios" });
+    expect(within(indicators).getByText("Ingresos totales")).toBeInTheDocument();
+    expect(within(indicators).getByText("Egresos")).toBeInTheDocument();
+    expect(within(indicators).getByText("Saldo acumulado")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("region", {
+        name: "Gráfico de Ingresos totales y egresos de los últimos doce meses",
+      }),
+    ).toBeInTheDocument();
+    const trendTable = screen.getByRole("table", {
+      name: "Ingresos totales y egresos de los últimos doce meses",
+    });
+    expect(within(trendTable).getAllByRole("row")).toHaveLength(13);
+    expect(screen.getByRole("link", { name: "Ver resumen detallado" })).toHaveAttribute(
+      "href",
+      "/resumen?period=202608&income=all",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+    expect(screen.getByRole("link", { name: "Inicio" })).toHaveAttribute("href", "/");
+    const summaryLink = screen.getByRole("link", { name: "Resumen" });
+    expect(summaryLink).toHaveAttribute("href", "/resumen");
+    await user.click(summaryLink);
+
+    expect(await screen.findByRole("heading", { name: "Resumen financiero" })).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/resumen");
+  });
+
+  it("actualiza el alcance de Inicio sin recargar y conserva el período al navegar", async () => {
+    const user = userEvent.setup();
+    const services = createServices([
+      makeTransaction({
+        id: "AUG-TITHE",
+        period: "202608",
+        date: new Date("2026-08-03T12:00:00.000Z"),
+        type: "INGRESO",
+        amount: 120,
+        category: "Diezmos",
+      }),
+      makeTransaction({
+        id: "AUG-OFFERING",
+        period: "202608",
+        date: new Date("2026-08-06T12:00:00.000Z"),
+        type: "INGRESO",
+        amount: 80,
+        category: "Ofrendas",
+      }),
+      makeTransaction({
+        id: "AUG-OTHER",
+        period: "202608",
+        date: new Date("2026-08-08T12:00:00.000Z"),
+        type: "INGRESO",
+        amount: 40,
+        category: "Donación especial",
+      }),
+      makeTransaction({
+        id: "AUG-EXPENSE",
+        period: "202608",
+        date: new Date("2026-08-08T12:00:00.000Z"),
+        type: "EGRESO",
+        amount: 50,
+        category: "Servicios",
+      }),
+      makeTransaction({
+        id: "JUL-TITHE",
+        period: "202607",
+        date: new Date("2026-07-03T12:00:00.000Z"),
+        type: "INGRESO",
+        amount: 100,
+        category: "Diezmos",
+      }),
+    ]);
+    const execute = vi.spyOn(services.dashboard, "execute");
+    renderApp("/?period=202608&income=invalid", services);
+
+    const result = await screen.findByRole("region", { name: "Resultado financiero" });
+    const scopeToggle = screen.getByRole("button", {
+      name: "Filtrar por solo aportes: diezmos y ofrendas",
+    });
+    expect(scopeToggle).toHaveAttribute("aria-pressed", "false");
+    expect(result).toHaveTextContent(formatMoney(190).replace(/\u00a0/g, " "));
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    await user.click(scopeToggle);
+
+    await waitFor(() => {
+      expect(scopeToggle).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/?period=202608&income=contributions",
+      );
+      expect(result).toHaveTextContent(formatMoney(150).replace(/\u00a0/g, " "));
+      expect(screen.getByRole("link", { name: "Ver resumen detallado" })).toHaveAttribute(
+        "href",
+        "/resumen?period=202608&income=contributions",
+      );
+      expect(
+        screen.getByRole("table", { name: "Aportes y egresos de los últimos doce meses" }),
+      ).toBeInTheDocument();
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    const period = await screen.findByRole("combobox", { name: "Período" });
+    await user.selectOptions(period, "202607");
+
+    await waitFor(() => {
+      expect(period).toHaveValue("202607");
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/?period=202607&income=contributions",
+      );
+      expect(screen.getByRole("link", { name: "Ver resumen detallado" })).toHaveAttribute(
+        "href",
+        "/resumen?period=202607&income=contributions",
+      );
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("comunica con claridad un déficit y el estado sin datos", async () => {
+    renderApp(
+      "/",
+      createServices([
+        makeTransaction({
+          id: "AUG-EXPENSE-ONLY",
+          period: "202608",
+          date: new Date("2026-08-08T12:00:00.000Z"),
+          type: "EGRESO",
+          amount: 250,
+          category: "Servicios",
+        }),
+      ]),
+    );
+
+    const deficit = await screen.findByRole("heading", { name: "Déficit" });
+    expect(deficit.closest("article")).toHaveAttribute("data-tone", "negative");
+    expect(deficit.closest("article")).toHaveTextContent(formatMoney(-250).replace(/\u00a0/g, " "));
+    expect(screen.queryByText("Claves del período")).not.toBeInTheDocument();
+
+    cleanup();
+    renderApp("/", createServices([]));
+
+    expect(await screen.findByText("Aún no hay información financiera.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Revisar calidad de datos" })).toHaveAttribute(
+      "href",
+      "/control/calidad",
+    );
+  });
+
+  it("muestra excepciones de calidad únicamente cuando hay filas excluidas", async () => {
+    renderApp("/", createServices(undefined, [invalidIssue]));
+
+    const exception = await screen.findByRole("status", {
+      name: "Calidad de datos requiere atención",
+    });
+    expect(exception).toHaveTextContent("1 fila excluida de los totales.");
+    expect(within(exception).getByRole("link", { name: "Revisar calidad" })).toHaveAttribute(
+      "href",
+      "/control/calidad",
+    );
+
+    cleanup();
+    renderApp("/");
+
+    await screen.findByRole("region", { name: "Resultado financiero" });
+    expect(
+      screen.queryByRole("status", { name: "Calidad de datos requiere atención" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("muestra saldos reales por cuenta y no los altera al filtrar aportes", async () => {
+    const user = userEvent.setup();
+    const services = createServices([
+      makeTransaction({
+        id: "AUG-INCOME",
+        period: "202608",
+        date: new Date("2026-08-03T12:00:00.000Z"),
+        type: "INGRESO",
+        account: "Cuenta corriente",
+        amount: 300,
+        category: "Ofrendas",
+      }),
+      makeTransaction({
+        id: "AUG-TRANSFER-OUT",
+        period: "202608",
+        date: new Date("2026-08-04T12:00:00.000Z"),
+        type: "TRANSFERENCIA",
+        account: "Cuenta corriente",
+        accountFlow: "OUTFLOW",
+        transferId: "TRANSFER-001",
+        amount: 100,
+        category: "Transferencia interna",
+      }),
+      makeTransaction({
+        id: "AUG-TRANSFER-IN",
+        period: "202608",
+        date: new Date("2026-08-04T12:00:00.000Z"),
+        type: "TRANSFERENCIA",
+        account: "Caja chica",
+        accountFlow: "INFLOW",
+        transferId: "TRANSFER-001",
+        amount: 100,
+        category: "Transferencia interna",
+      }),
+      makeTransaction({
+        id: "AUG-EXPENSE",
+        period: "202608",
+        date: new Date("2026-08-05T12:00:00.000Z"),
+        type: "EGRESO",
+        account: "Caja chica",
+        amount: 50,
+        category: "Materiales",
+      }),
+    ]);
+    renderApp("/", services);
+
+    const accountPosition = await screen.findByRole("region", { name: "Saldo por cuenta" });
+    expect(screen.getByRole("heading", { name: "Inicio", level: 1 })).toHaveClass("sr-only");
+    expect(within(accountPosition).getByText("Cuenta corriente")).toBeInTheDocument();
+    expect(within(accountPosition).getByText("Caja chica")).toBeInTheDocument();
+    expect(within(accountPosition).getByText("Total disponible")).toBeInTheDocument();
+    expect(within(accountPosition).getByText(/250\.00/)).toBeInTheDocument();
+    expect(accountPosition).toHaveTextContent("Todos los ingresos, egresos y transferencias.");
+
+    await user.click(
+      screen.getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Saldo de aportes")).toBeInTheDocument();
+      expect(within(accountPosition).getByText(/250\.00/)).toBeInTheDocument();
+    });
+  });
+
+  it("permite filtrar y distinguir transferencias en Movimientos", async () => {
+    const services = createServices([
+      makeTransaction({
+        id: "TRANSFER-OUT",
+        period: "202608",
+        date: new Date("2026-08-04T12:00:00.000Z"),
+        type: "TRANSFERENCIA",
+        account: "Cuenta corriente",
+        accountFlow: "OUTFLOW",
+        transferId: "TRANSFER-002",
+        amount: 75,
+        category: "Transferencia interna",
+        description: "Traslado a caja chica",
+      }),
+      makeTransaction({
+        id: "TRANSFER-IN",
+        period: "202608",
+        date: new Date("2026-08-04T12:00:00.000Z"),
+        type: "TRANSFERENCIA",
+        account: "Caja chica",
+        accountFlow: "INFLOW",
+        transferId: "TRANSFER-002",
+        amount: 75,
+        category: "Transferencia interna",
+        description: "Traslado desde cuenta corriente",
+      }),
+    ]);
+    renderApp("/movimientos?type=TRANSFERENCIA", services);
+
+    expect(await screen.findByRole("status")).toHaveTextContent("2 movimientos encontrados");
+    expect(screen.getByRole("combobox", { name: "Tipo" })).toHaveValue("TRANSFERENCIA");
+    expect(screen.getAllByLabelText("Transferencia")).not.toHaveLength(0);
+    expect(screen.getAllByText("↔")).not.toHaveLength(0);
+  });
+
+  it("muestra transferencias neutrales con su flujo en la actividad reciente", async () => {
+    const services = createServices([
+      makeTransaction({
+        id: "TRANSFER-OUT",
+        period: "202608",
+        date: new Date("2026-08-04T12:00:00.000Z"),
+        type: "TRANSFERENCIA",
+        account: "Cuenta corriente",
+        accountFlow: "OUTFLOW",
+        transferId: "TRANSFER-003",
+        amount: 75,
+        category: "Transferencia interna",
+        description: "Traslado a caja chica",
+      }),
+      makeTransaction({
+        id: "TRANSFER-IN",
+        period: "202608",
+        date: new Date("2026-08-04T12:00:00.000Z"),
+        type: "TRANSFERENCIA",
+        account: "Caja chica",
+        accountFlow: "INFLOW",
+        transferId: "TRANSFER-003",
+        amount: 75,
+        category: "Transferencia interna",
+        description: "Traslado desde cuenta corriente",
+      }),
+    ]);
+    renderApp("/resumen?period=202608", services);
+
+    const recentTitle = await screen.findByRole("heading", { name: "Movimientos recientes" });
+    const recentActivity = recentTitle.closest("section");
+    if (!recentActivity) throw new Error("No se encontró el panel de actividad reciente.");
+
+    expect(within(recentActivity).getAllByLabelText("Transferencia")).not.toHaveLength(0);
+    expect(within(recentActivity).getAllByText("↔")).not.toHaveLength(0);
+    expect(recentActivity).toHaveTextContent("−");
+    expect(recentActivity).toHaveTextContent("+");
   });
 
   it("mantiene un único alcance global en la URL y no vuelve a consultar al alternarlo", async () => {
@@ -172,7 +488,7 @@ describe("navegación principal", () => {
       [invalidIssue],
     );
     const execute = vi.spyOn(services.dashboard, "execute");
-    renderApp("/?income=invalid&period=202608", services);
+    renderApp("/resumen?income=invalid&period=202608", services);
 
     const scopeControl = await screen.findByRole("group", {
       name: "Alcance global de ingresos",
@@ -224,7 +540,7 @@ describe("navegación principal", () => {
   });
 
   it("muestra los indicadores y comparaciones de ambos escenarios financieros", async () => {
-    renderApp("/");
+    renderApp("/resumen");
 
     const financialCards = await screen.findByLabelText("Indicadores financieros del período");
     const expenses = within(financialCards).getByText("Egresos").closest("article");
@@ -248,7 +564,7 @@ describe("navegación principal", () => {
 
   it("organiza el análisis en tabs accesibles y conserva el tab activo al cambiar de período", async () => {
     const user = userEvent.setup();
-    renderApp("/");
+    renderApp("/resumen");
 
     const tablist = await screen.findByRole("tablist", { name: "Horizonte del análisis" });
     const currentTab = within(tablist).getByRole("tab", { name: "Período actual" });
@@ -307,7 +623,7 @@ describe("navegación principal", () => {
   it("mantiene los tres ingresos visibles cuando no hay aportes ni otros ingresos", async () => {
     const user = userEvent.setup();
     renderApp(
-      "/",
+      "/resumen",
       createServices([
         makeTransaction({
           id: "AUG-EXPENSE",
@@ -336,7 +652,7 @@ describe("navegación principal", () => {
     const contributions = 1_234_567_890.12;
     const otherIncome = 98_765_432.1;
     renderApp(
-      "/",
+      "/resumen",
       createServices([
         makeTransaction({
           id: "AUG-LARGE-TITHE",
@@ -404,12 +720,35 @@ describe("navegación principal", () => {
   it("ofrece recuperación cuando no se puede cargar el resumen", async () => {
     const services = createServices();
     services.dashboard = new FailingDashboardOverviewUseCase(new InMemoryTransactionRepository());
-    renderApp("/", services);
+    renderApp("/resumen", services);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "No se pudo cargar el resumen financiero.",
     );
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeEnabled();
+  });
+
+  it("ofrece recuperación cuando no se puede cargar Inicio", async () => {
+    const services = createServices();
+    services.dashboard = new FailingDashboardOverviewUseCase(new InMemoryTransactionRepository());
+    renderApp("/", services);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se pudo cargar la vista ejecutiva.",
+    );
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeEnabled();
+  });
+
+  it("mantiene una carga compacta de Inicio mientras llega la información", () => {
+    const services = createServices();
+    vi.spyOn(services.dashboard, "execute").mockImplementation(
+      () => new Promise<DashboardOverview>(() => {}),
+    );
+    renderApp("/", services);
+
+    expect(screen.getByRole("heading", { name: "Inicio" })).toBeInTheDocument();
+    expect(screen.getByText("Preparando la vista ejecutiva.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Resultado financiero" })).not.toBeInTheDocument();
   });
 });
 

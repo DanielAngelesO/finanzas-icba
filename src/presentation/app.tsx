@@ -11,6 +11,7 @@ import { DashboardPage } from "./pages/dashboard-page";
 import { DataQualityPage } from "./pages/data-quality-page";
 import { DataSourcePage } from "./pages/data-source-page";
 import { ExpensesPage } from "./pages/expenses-page";
+import { HomePage } from "./pages/home-page";
 import { LoginPage } from "./pages/login-page";
 import { TransactionsPage } from "./pages/transactions-page";
 
@@ -61,7 +62,8 @@ export function AppRoutes({ services }: { services: AppServices }) {
           </ProtectedContent>
         }
       >
-        <Route index element={<DashboardPage services={services} />} />
+        <Route index element={<HomePage services={services} />} />
+        <Route path="resumen" element={<DashboardPage services={services} />} />
         <Route path="movimientos" element={<TransactionsPage services={services} />} />
         <Route path="gastos" element={<ExpensesPage services={services} />} />
         <Route path="control/calidad" element={<DataQualityPage services={services} />} />

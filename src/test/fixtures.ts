@@ -19,11 +19,14 @@ export const sheetConfig: GoogleSheetsDataSourceConfig = {
 
 export const header = Object.values(transactionColumnMapping);
 
-export const transactionRow = (overrides: Record<string, string | number | null> = {}) => {
+export const transactionRow = (
+  overrides: Record<string, string | number | null> = {},
+): Array<string | number | null> => {
   const base: Record<string, string | number | null> = {
     ID: "TX-001",
     Fecha: "03/08/2026",
     "Tipo Transacción": "Ingreso",
+    "Id Transaccion": "",
     Cuenta: "Caja",
     Categoría: "Ofrendas",
     Subcategoría: "General",
@@ -38,24 +41,31 @@ export const transactionRow = (overrides: Record<string, string | number | null>
     Notas: "",
     ...overrides,
   };
-  return header.map((column) => base[column]);
+  return header.map((column) => base[column] ?? null);
 };
 
-export const makeTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
-  id: "TX-001",
-  date: new Date("2026-08-03T05:00:00.000Z"),
-  type: "INGRESO",
-  account: "Caja",
-  category: "Ofrendas",
-  subcategory: null,
-  description: "Ofrenda",
-  responsible: "Tesorería",
-  donorOrProvider: null,
-  paymentMethod: "Efectivo",
-  referenceOrReceipt: null,
-  amount: 100,
-  status: "Confirmado",
-  period: "202608",
-  notes: null,
-  ...overrides,
-});
+export const makeTransaction = (overrides: Partial<Transaction> = {}): Transaction => {
+  const type = overrides.type ?? "INGRESO";
+  const accountFlow = overrides.accountFlow ?? (type === "EGRESO" ? "OUTFLOW" : "INFLOW");
+
+  return {
+    id: "TX-001",
+    date: new Date("2026-08-03T05:00:00.000Z"),
+    type,
+    accountFlow,
+    account: "Caja",
+    transferId: null,
+    category: "Ofrendas",
+    subcategory: null,
+    description: "Ofrenda",
+    responsible: "Tesorería",
+    donorOrProvider: null,
+    paymentMethod: "Efectivo",
+    referenceOrReceipt: null,
+    amount: 100,
+    status: "Confirmado",
+    period: "202608",
+    notes: null,
+    ...overrides,
+  };
+};

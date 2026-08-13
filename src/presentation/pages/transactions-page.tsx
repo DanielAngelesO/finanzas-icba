@@ -33,7 +33,13 @@ const sortOptions = [
 ] satisfies ReadonlyArray<{ value: TransactionSort; label: string }>;
 
 const isTransactionType = (value: string | null): value is TransactionType =>
-  value === "INGRESO" || value === "EGRESO";
+  value === "INGRESO" || value === "EGRESO" || value === "TRANSFERENCIA";
+
+const getTransactionTypeLabel = (type: TransactionType): string => {
+  if (type === "INGRESO") return "Ingreso";
+  if (type === "EGRESO") return "Egreso";
+  return "Transferencia";
+};
 
 const isValidPeriod = (value: string | null): value is string => {
   if (!value || !/^\d{6}$/.test(value)) return false;
@@ -365,6 +371,7 @@ export function TransactionsPage({ services }: { services: AppServices }) {
                     <option value="">Todos los tipos</option>
                     <option value="INGRESO">Ingreso</option>
                     <option value="EGRESO">Egreso</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
                   </select>
                 </label>
               </div>
@@ -495,8 +502,7 @@ export function TransactionsPage({ services }: { services: AppServices }) {
                     type="button"
                     onClick={() => updateUrlCriteria({ type: null, page: 1 })}
                   >
-                    Tipo: {criteria.type === "INGRESO" ? "Ingreso" : "Egreso"}{" "}
-                    <span aria-hidden="true">×</span>
+                    Tipo: {getTransactionTypeLabel(criteria.type)} <span aria-hidden="true">×</span>
                   </button>
                 ) : null}
                 {criteria.dateFrom ? (
