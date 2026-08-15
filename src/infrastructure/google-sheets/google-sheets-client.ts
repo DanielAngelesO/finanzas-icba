@@ -14,7 +14,7 @@ const spreadsheetSchema = z.object({
   sheets: z
     .array(
       z.object({
-        properties: z.object({ title: z.string() }),
+        properties: z.object({ sheetId: z.number().int(), title: z.string() }),
       }),
     )
     .optional(),
@@ -37,7 +37,37 @@ export interface SpreadsheetMetadataResponse {
   id: string;
   title: string | null;
   sheetNames: string[];
+  sheets: Array<{ id: number; title: string }>;
 }
+
+export type GoogleUserEnteredValue =
+  { stringValue: string } | { numberValue: number } | { boolValue: boolean };
+
+export interface GoogleCellData {
+  userEnteredValue: GoogleUserEnteredValue;
+}
+
+export type GoogleSheetsBatchRequest =
+  | {
+      appendCells: {
+        sheetId: number;
+        rows: Array<{ values: GoogleCellData[] }>;
+        fields: "userEnteredValue";
+      };
+    }
+  | {
+      updateCells: {
+        range: {
+          sheetId: number;
+          startRowIndex: number;
+          endRowIndex: number;
+          startColumnIndex: number;
+          endColumnIndex: number;
+        };
+        rows: Array<{ values: [GoogleCellData] }>;
+        fields: "userEnteredValue";
+      };
+    };
 
 export class GoogleSheetsClient {
   private readonly fetcher: typeof fetch;
@@ -51,7 +81,7 @@ export class GoogleSheetsClient {
   }
 
   public async getMetadata(): Promise<SpreadsheetMetadataResponse> {
-    const path = `/${encodeURIComponent(this.config.spreadsheetId)}?fields=spreadsheetId,properties(title),sheets.properties(title)`;
+    const path = `/${encodeURIComponent(this.config.spreadsheetId)}?fields=spreadsheetId,properties(title),sheets.properties(sheetId,title)`;
     const payload = await this.request(path);
     const parsed = spreadsheetSchema.safeParse(payload);
     if (!parsed.success) throw new GoogleSheetsError("Metadatos de Google inválidos.", null, false);
@@ -59,11 +89,19 @@ export class GoogleSheetsClient {
       id: parsed.data.spreadsheetId,
       title: parsed.data.properties?.title ?? null,
       sheetNames: parsed.data.sheets?.map((sheet) => sheet.properties.title) ?? [],
+      sheets:
+        parsed.data.sheets?.map((sheet) => ({
+          id: sheet.properties.sheetId,
+          title: sheet.properties.title,
+        })) ?? [],
     };
   }
 
-  public async getValues(): Promise<GoogleCell[][]> {
-    const range = `'${this.config.sheetName.replaceAll("'", "''")}'!${this.config.range}`;
+  public async getValues(
+    sheetName = this.config.sheetName,
+    requestedRange = this.config.range,
+  ): Promise<GoogleCell[][]> {
+    const range = `'${sheetName.replaceAll("'", "''")}'!${requestedRange}`;
     const path = `/${encodeURIComponent(this.config.spreadsheetId)}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER`;
     const payload = await this.request(path);
     const parsed = valueRangeSchema.safeParse(payload);
@@ -71,11 +109,22 @@ export class GoogleSheetsClient {
     return parsed.data.values ?? [];
   }
 
-  private async request(path: string): Promise<unknown> {
+  public async batchUpdate(requests: GoogleSheetsBatchRequest[]): Promise<void> {
+    await this.request(
+      `/${encodeURIComponent(this.config.spreadsheetId)}:batchUpdate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requests }),
+      },
+      1,
+    );
+  }
+
+  private async request(path: string, init: RequestInit = {}, attempts = 3): Promise<unknown> {
     const token = this.accessToken();
     if (!token) throw new GoogleSheetsError("La sesión de Google expiró.", 401, false);
     const url = `https://sheets.googleapis.com/v4/spreadsheets${path}`;
-    const attempts = 3;
     let lastError: GoogleSheetsError | null = null;
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -84,7 +133,8 @@ export class GoogleSheetsClient {
       const timeout = window.setTimeout(() => controller.abort(), 12_000);
       try {
         const response = await this.fetcher(url, {
-          headers: { Authorization: `Bearer ${token}` },
+          ...init,
+          headers: { ...init.headers, Authorization: `Bearer ${token}` },
           signal: controller.signal,
         });
         const elapsedMs = Math.round(performance.now() - startedAt);
@@ -131,9 +181,9 @@ export class GoogleSheetsClient {
 
   private messageForStatus(status: number): string {
     if (status === 401) return "La sesión de Google expiró.";
-    if (status === 403) return "Tu cuenta no tiene permiso para leer este archivo.";
+    if (status === 403) return "Tu cuenta no tiene permiso para consultar o editar este archivo.";
     if (status === 404) return "No se encontró el archivo o la pestaña configurada.";
     if (status === 429) return "Google Sheets limitó temporalmente las solicitudes.";
-    return "Google Sheets devolvió un error al leer los datos.";
+    return "Google Sheets devolvió un error al procesar los datos.";
   }
 }

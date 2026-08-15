@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeTransaction } from "../../test/fixtures";
+import { groupLogicalTransactions } from "../../domain/logical-transaction";
 import {
   defaultTransactionExplorerCriteria,
   exploreTransactions,
@@ -10,7 +11,7 @@ const createCriteria = (
   overrides: Partial<TransactionExplorerCriteria> = {},
 ): TransactionExplorerCriteria => ({ ...defaultTransactionExplorerCriteria, ...overrides });
 
-const transactions = [
+const transactions = groupLogicalTransactions([
   makeTransaction({
     id: "ING-01",
     date: new Date("2026-08-18T05:00:00.000Z"),
@@ -21,7 +22,7 @@ const transactions = [
     donorOrProvider: "María Álvarez",
     referenceOrReceipt: "REC-18",
     amount: 300,
-    status: "Confirmado",
+    status: "CONFIRMED",
     period: "202608",
   }),
   makeTransaction({
@@ -33,7 +34,7 @@ const transactions = [
     description: "Compra de víveres",
     responsible: "Diaconía",
     amount: 500,
-    status: "Pendiente",
+    status: "PENDING",
     period: "202608",
   }),
   makeTransaction({
@@ -44,10 +45,10 @@ const transactions = [
     category: "Diezmos",
     description: "Aporte mensual",
     amount: 300,
-    status: "Confirmado",
+    status: "CONFIRMED",
     period: "202607",
   }),
-];
+]);
 
 describe("exploreTransactions", () => {
   it("encuentra texto parcial sin distinguir tildes, mayúsculas ni espacios", () => {
@@ -56,7 +57,7 @@ describe("exploreTransactions", () => {
       createCriteria({ search: "  maria alvarez " }),
     );
 
-    expect(result.transactions.map((transaction) => transaction.id)).toEqual(["ING-01"]);
+    expect(result.transactions.map((transaction) => transaction.transactionId)).toEqual(["ING-01"]);
   });
 
   it("combina filtros, incluidos los límites de fecha de forma inclusiva", () => {
@@ -70,13 +71,16 @@ describe("exploreTransactions", () => {
       }),
     );
 
-    expect(result.transactions.map((transaction) => transaction.id)).toEqual(["ING-01", "ING-02"]);
+    expect(result.transactions.map((transaction) => transaction.transactionId)).toEqual([
+      "ING-01",
+      "ING-02",
+    ]);
   });
 
   it("ordena de forma estable por monto y usa fecha e ID para desempatar", () => {
     const result = exploreTransactions(transactions, createCriteria({ sort: "amount-desc" }));
 
-    expect(result.transactions.map((transaction) => transaction.id)).toEqual([
+    expect(result.transactions.map((transaction) => transaction.transactionId)).toEqual([
       "EGR-01",
       "ING-01",
       "ING-02",
@@ -95,7 +99,7 @@ describe("exploreTransactions", () => {
       periods: ["202608", "202607"],
       accounts: ["Banco", "Caja"],
       categories: ["Ayuda social", "Diezmos", "Ofrendas"],
-      statuses: ["Confirmado", "Pendiente"],
+      statuses: ["CONFIRMED", "PENDING"],
     });
   });
 });

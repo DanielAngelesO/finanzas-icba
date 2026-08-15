@@ -4,7 +4,7 @@ export interface TransactionColumnMapping {
   id: string;
   date: string;
   type: string;
-  transferId: string;
+  transactionId: string;
   account: string;
   category: string;
   subcategory: string;
@@ -17,6 +17,16 @@ export interface TransactionColumnMapping {
   status: string;
   period: string;
   notes: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  version: string;
+  voidedAt: string;
+  voidedBy: string;
+  voidReason: string;
+  correctsTransactionId: string;
+  correctedBy: string;
 }
 
 export interface GoogleSheetsDataSourceConfig {
@@ -31,6 +41,7 @@ export interface GoogleSheetsDataSourceConfig {
   decimalSeparator: "." | ",";
   activeYear: number | null;
   allowedEmails: string[];
+  writesEnabled: boolean;
   columnMapping: TransactionColumnMapping;
 }
 
@@ -38,7 +49,7 @@ export const transactionColumnMapping: TransactionColumnMapping = {
   id: "ID",
   date: "Fecha",
   type: "Tipo Transacción",
-  transferId: "Id Transaccion",
+  transactionId: "Id Transaccion",
   account: "Cuenta",
   category: "Categoría",
   subcategory: "Subcategoría",
@@ -51,6 +62,16 @@ export const transactionColumnMapping: TransactionColumnMapping = {
   status: "Estado",
   period: "Período",
   notes: "Notas",
+  createdAt: "Creado En",
+  createdBy: "Creado Por",
+  updatedAt: "Actualizado En",
+  updatedBy: "Actualizado Por",
+  version: "Versión",
+  voidedAt: "Anulado En",
+  voidedBy: "Anulado Por",
+  voidReason: "Motivo Anulación",
+  correctsTransactionId: "Corrige A",
+  correctedBy: "Corregida Por",
 };
 
 const optionalString = z.string().trim().optional();
@@ -71,6 +92,7 @@ const environmentSchema = z.object({
   VITE_GOOGLE_DECIMAL_SEPARATOR: z.enum([".", ","]).optional(),
   VITE_ALLOWED_EMAILS: optionalString,
   VITE_ACTIVE_YEAR: optionalString,
+  VITE_TRANSACTION_WRITES_ENABLED: z.enum(["true", "false"]).optional(),
 });
 
 export type AppConfig =
@@ -147,6 +169,7 @@ export const loadAppConfig = (environment: unknown = import.meta.env): AppConfig
       decimalSeparator,
       activeYear,
       allowedEmails,
+      writesEnabled: env.VITE_TRANSACTION_WRITES_ENABLED === "true",
       columnMapping: transactionColumnMapping,
     },
   };

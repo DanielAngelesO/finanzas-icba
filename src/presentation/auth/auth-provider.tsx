@@ -10,7 +10,7 @@ import {
 import { AuthContext, type AuthContextValue, type AuthState } from "./auth-context";
 
 const googleScriptUrl = "https://accounts.google.com/gsi/client";
-const googleScope = "openid email profile https://www.googleapis.com/auth/spreadsheets.readonly";
+const googleScope = "openid email profile https://www.googleapis.com/auth/spreadsheets";
 
 const loadGoogleIdentity = (): Promise<void> =>
   new Promise((resolve, reject) => {

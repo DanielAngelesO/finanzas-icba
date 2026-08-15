@@ -14,6 +14,7 @@ export const sheetConfig: GoogleSheetsDataSourceConfig = {
   decimalSeparator: ".",
   activeYear: 2026,
   allowedEmails: ["tesorero@iglesia.org"],
+  writesEnabled: true,
   columnMapping: transactionColumnMapping,
 };
 
@@ -47,9 +48,13 @@ export const transactionRow = (
 export const makeTransaction = (overrides: Partial<Transaction> = {}): Transaction => {
   const type = overrides.type ?? "INGRESO";
   const accountFlow = overrides.accountFlow ?? (type === "EGRESO" ? "OUTFLOW" : "INFLOW");
+  const id = overrides.id ?? "TX-001";
+  const transactionId = overrides.transactionId ?? overrides.transferId ?? id;
 
   return {
-    id: "TX-001",
+    id,
+    transactionId,
+    rowNumber: null,
     date: new Date("2026-08-03T05:00:00.000Z"),
     type,
     accountFlow,
@@ -63,9 +68,19 @@ export const makeTransaction = (overrides: Partial<Transaction> = {}): Transacti
     paymentMethod: "Efectivo",
     referenceOrReceipt: null,
     amount: 100,
-    status: "Confirmado",
+    status: "CONFIRMED",
     period: "202608",
     notes: null,
+    version: 1,
+    createdAt: null,
+    createdBy: null,
+    updatedAt: null,
+    updatedBy: null,
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+    correctsTransactionId: null,
+    correctedBy: null,
     ...overrides,
   };
 };

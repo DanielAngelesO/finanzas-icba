@@ -20,7 +20,7 @@ export interface TransactionDataSourceMetadata {
   timezone: string;
   locale: string;
   activeYear: number | null;
-  readOnly: true;
+  readOnly: boolean;
 }
 
 export type ValidationSeverity = "error" | "warning";

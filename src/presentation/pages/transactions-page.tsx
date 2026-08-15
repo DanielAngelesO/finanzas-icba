@@ -1,45 +1,54 @@
-import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   defaultTransactionExplorerCriteria,
   exploreTransactions,
-  transactionPageSizes,
-  transactionSorts,
   type TransactionExplorerCriteria,
-  type TransactionPageSize,
   type TransactionSort,
 } from "../../application/use-cases/explore-transactions";
 import type { AppServices } from "../../composition/services";
-import type { Transaction, TransactionType } from "../../domain/transaction";
-import { TransactionDetailDialog, TransactionResults } from "../components/transaction-table";
+import {
+  getTransactionStatusLabel,
+  type LogicalTransaction,
+  type TransactionActor,
+  type TransactionStatus,
+  type TransactionType,
+} from "../../domain/transaction";
+import { useAuth } from "../auth/auth-context";
+import { TransactionDetailSheet } from "../features/transactions/transaction-detail-sheet";
+import { TransactionEditorSheet } from "../features/transactions/transaction-editor-sheet";
+import {
+  TransactionFilterSheet,
+  type TransactionFilterDraft,
+} from "../features/transactions/transaction-filter-sheet";
+import { TransactionList } from "../features/transactions/transaction-list";
+import { PeriodNavigator } from "../features/transactions/period-navigator";
+import {
+  getCurrentLimaPeriod,
+  getTransactionTypeLabel,
+} from "../features/transactions/transaction-ui";
 import { formatPeriod } from "../formatters";
 
-type UrlCriteria = Omit<TransactionExplorerCriteria, "search">;
+type UrlCriteria = Omit<TransactionExplorerCriteria, "search" | "page" | "pageSize">;
 
-interface AdvancedFilterDraft {
-  dateFrom: string;
-  dateTo: string;
-  account: string;
-  category: string;
-  status: string;
+interface ToastState {
+  message: string;
+  similarTransactionId: string | null;
 }
 
-const sortOptions = [
-  { value: "date-desc", label: "Más recientes" },
-  { value: "date-asc", label: "Más antiguos" },
-  { value: "amount-desc", label: "Mayor monto" },
-  { value: "amount-asc", label: "Menor monto" },
-] satisfies ReadonlyArray<{ value: TransactionSort; label: string }>;
+const quickTypeOptions: Array<{ value: TransactionType | null; label: string }> = [
+  { value: null, label: "Todos" },
+  { value: "INGRESO", label: "Ingresos" },
+  { value: "EGRESO", label: "Egresos" },
+  { value: "TRANSFERENCIA", label: "Transferencias" },
+];
 
 const isTransactionType = (value: string | null): value is TransactionType =>
   value === "INGRESO" || value === "EGRESO" || value === "TRANSFERENCIA";
 
-const getTransactionTypeLabel = (type: TransactionType): string => {
-  if (type === "INGRESO") return "Ingreso";
-  if (type === "EGRESO") return "Egreso";
-  return "Transferencia";
-};
+const isTransactionStatus = (value: string | null): value is TransactionStatus =>
+  value === "CONFIRMED" || value === "PENDING" || value === "VOIDED";
 
 const isValidPeriod = (value: string | null): value is string => {
   if (!value || !/^\d{6}$/.test(value)) return false;
@@ -49,258 +58,441 @@ const isValidPeriod = (value: string | null): value is string => {
 
 const isValidDate = (value: string | null): value is string => {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [yearText, monthText, dayText] = value.split("-");
-  if (!yearText || !monthText || !dayText) return false;
-  const year = Number(yearText);
-  const month = Number(monthText);
-  const day = Number(dayText);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  );
+  const date = new Date(`${value}T12:00:00`);
+  return !Number.isNaN(date.getTime());
 };
 
-const readTextParameter = (searchParams: URLSearchParams, name: string): string | null => {
-  const value = searchParams.get(name)?.trim();
+const readText = (params: URLSearchParams, name: string): string | null => {
+  const value = params.get(name)?.trim();
   return value ? value : null;
 };
 
-const readPage = (value: string | null): number => {
-  if (!value || !/^\d+$/.test(value)) return 1;
-  const page = Number(value);
-  return Number.isSafeInteger(page) && page > 0 ? page : 1;
-};
-
-const readPageSize = (value: string | null): TransactionPageSize => {
-  const pageSize = Number(value);
-  return transactionPageSizes.find((size) => size === pageSize) ?? 20;
-};
-
 const readSort = (value: string | null): TransactionSort =>
-  transactionSorts.find((sort) => sort === value) ?? "date-desc";
+  value === "date-asc" || value === "amount-desc" || value === "amount-asc" ? value : "date-desc";
 
-const getUrlCriteria = (searchParams: URLSearchParams): UrlCriteria => {
-  const periodParameter = searchParams.get("period");
-  const typeParameter = searchParams.get("type");
-  const fromParameter = searchParams.get("from");
-  const toParameter = searchParams.get("to");
+const getUrlCriteria = (params: URLSearchParams): UrlCriteria => {
+  const period = params.get("period");
+  const type = params.get("type");
+  const status = params.get("status");
+  const dateFrom = params.get("from");
+  const dateTo = params.get("to");
   return {
-    period: isValidPeriod(periodParameter) ? periodParameter : null,
-    type: isTransactionType(typeParameter) ? typeParameter : null,
-    dateFrom: isValidDate(fromParameter) ? fromParameter : null,
-    dateTo: isValidDate(toParameter) ? toParameter : null,
-    account: readTextParameter(searchParams, "account"),
-    category: readTextParameter(searchParams, "category"),
-    status: readTextParameter(searchParams, "status"),
-    sort: readSort(searchParams.get("sort")),
-    page: readPage(searchParams.get("page")),
-    pageSize: readPageSize(searchParams.get("pageSize")),
+    period: period === "all" ? null : isValidPeriod(period) ? period : getCurrentLimaPeriod(),
+    type: isTransactionType(type) ? type : null,
+    dateFrom: isValidDate(dateFrom) ? dateFrom : null,
+    dateTo: isValidDate(dateTo) ? dateTo : null,
+    account: readText(params, "account"),
+    category: readText(params, "category"),
+    status: isTransactionStatus(status) ? status : null,
+    sort: readSort(params.get("sort")),
   };
 };
 
-const getAdvancedDraft = (criteria: UrlCriteria): AdvancedFilterDraft => ({
-  dateFrom: criteria.dateFrom ?? "",
-  dateTo: criteria.dateTo ?? "",
-  account: criteria.account ?? "",
-  category: criteria.category ?? "",
-  status: criteria.status ?? "",
-});
-
-const setOptionalParameter = (
-  searchParams: URLSearchParams,
-  name: string,
-  value: string | null,
-) => {
-  if (value) searchParams.set(name, value);
-  else searchParams.delete(name);
+const setOptional = (params: URLSearchParams, name: string, value: string | null): void => {
+  if (value) params.set(name, value);
+  else params.delete(name);
 };
 
-const hasFilters = (criteria: TransactionExplorerCriteria): boolean =>
-  Boolean(
-    criteria.search ||
-    criteria.period ||
-    criteria.type ||
-    criteria.dateFrom ||
-    criteria.dateTo ||
-    criteria.account ||
-    criteria.category ||
-    criteria.status,
-  );
+const countAdvancedFilters = (criteria: TransactionExplorerCriteria): number =>
+  [criteria.dateFrom, criteria.dateTo, criteria.account, criteria.category, criteria.status].filter(
+    Boolean,
+  ).length + (criteria.period === null ? 1 : 0);
 
 function TransactionLoadingState() {
   return (
-    <section className="space-y-4" aria-busy="true" aria-live="polite">
-      <div className="shimmer h-36 w-full" aria-hidden="true" />
-      <div className="shimmer h-12 w-full" aria-hidden="true" />
-      <div className="shimmer h-28 w-full" aria-hidden="true" />
-      <div className="shimmer h-28 w-full" aria-hidden="true" />
+    <section className="transaction-loading-list" aria-busy="true" aria-live="polite">
+      <div className="shimmer h-20 w-full" aria-hidden="true" />
+      <div className="shimmer h-20 w-full" aria-hidden="true" />
+      <div className="shimmer h-20 w-full" aria-hidden="true" />
       <span className="sr-only">Cargando movimientos.</span>
     </section>
   );
 }
 
-export function TransactionsPage({ services }: { services: AppServices }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState("");
-  const [advancedDraft, setAdvancedDraft] = useState<AdvancedFilterDraft>(() =>
-    getAdvancedDraft(getUrlCriteria(searchParams)),
-  );
-  const [advancedError, setAdvancedError] = useState<string | null>(null);
-  const [advancedOpen, setAdvancedOpen] = useState(() => {
-    const initialCriteria = getUrlCriteria(searchParams);
-    return Boolean(
-      initialCriteria.dateFrom ||
-      initialCriteria.dateTo ||
-      initialCriteria.account ||
-      initialCriteria.category ||
-      initialCriteria.status,
-    );
-  });
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [detailTrigger, setDetailTrigger] = useState<HTMLButtonElement | null>(null);
+function TransactionSearchControl({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
 
+  useEffect(() => {
+    if (draft.trim() === value) return;
+    const timeout = window.setTimeout(() => onCommit(draft.trim()), 150);
+    return () => window.clearTimeout(timeout);
+  }, [draft, onCommit, value]);
+
+  return (
+    <label className="transaction-search-field">
+      <span className="sr-only">Buscar movimientos</span>
+      <span aria-hidden="true">⌕</span>
+      <input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="Buscar monto, persona, cuenta…"
+      />
+    </label>
+  );
+}
+
+export function TransactionsPage({ services }: { services: AppServices }) {
+  const { transactionId } = useParams<{ transactionId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { state: authState } = useAuth();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [detailTrigger, setDetailTrigger] = useState<HTMLButtonElement | null>(null);
+  const newButtonRef = useRef<HTMLButtonElement>(null);
   const urlCriteria = useMemo(() => getUrlCriteria(searchParams), [searchParams]);
-  const criteria = useMemo<TransactionExplorerCriteria>(
-    () => ({ ...urlCriteria, search: search.trim() }),
+  const search = readText(searchParams, "q") ?? "";
+  const paginationKey = useMemo(
+    () => JSON.stringify({ search, ...urlCriteria }),
     [search, urlCriteria],
   );
+  const [pagination, setPagination] = useState(() => ({ key: paginationKey, count: 30 }));
+  const visibleCount = pagination.key === paginationKey ? pagination.count : 30;
+  const criteria = useMemo<TransactionExplorerCriteria>(
+    () => ({ ...urlCriteria, search, page: 1, pageSize: visibleCount }),
+    [search, urlCriteria, visibleCount],
+  );
+  const actor = useMemo<TransactionActor>(
+    () => ({
+      email: authState.status === "authenticated" ? authState.email : "",
+      displayName: authState.status === "authenticated" ? authState.name : null,
+    }),
+    [authState],
+  );
+
   const transactionsQuery = useQuery({
-    queryKey: ["transactions", "explorer"],
+    queryKey: ["transactions", "logical"],
     queryFn: () => services.transactions.findAll(),
   });
-  const explorerResult = useMemo(
+  const catalogsQuery = useQuery({
+    queryKey: ["transactions", "catalogs"],
+    queryFn: () => services.transactions.getCatalogs(),
+  });
+  const writable = catalogsQuery.data?.writeCapability.status === "enabled";
+  const writeReason =
+    catalogsQuery.data?.writeCapability.status === "disabled"
+      ? catalogsQuery.data.writeCapability.reason
+      : null;
+  const explorer = useMemo(
     () => (transactionsQuery.data ? exploreTransactions(transactionsQuery.data, criteria) : null),
     [criteria, transactionsQuery.data],
   );
+  const selectedTransaction = useMemo(
+    () =>
+      transactionId
+        ? (transactionsQuery.data?.find(
+            (transaction) =>
+              transaction.transactionId === transactionId ||
+              transaction.rowIds.includes(transactionId),
+          ) ?? null)
+        : null,
+    [transactionId, transactionsQuery.data],
+  );
+  const duplicateId = searchParams.get("duplicate");
+  const duplicatedTransaction = useMemo(
+    () =>
+      duplicateId
+        ? (transactionsQuery.data?.find(
+            (transaction) => transaction.transactionId === duplicateId,
+          ) ?? null)
+        : null,
+    [duplicateId, transactionsQuery.data],
+  );
+  const similarId = searchParams.get("similar");
+  const similarTransaction = useMemo(
+    () =>
+      similarId
+        ? (transactionsQuery.data?.find((transaction) => transaction.transactionId === similarId) ??
+          null)
+        : null,
+    [similarId, transactionsQuery.data],
+  );
+  const isNewRoute = location.pathname === "/movimientos/nueva";
+  const isEditRoute = location.pathname.endsWith("/editar");
+  const isDetailRoute = Boolean(transactionId) && !isEditRoute;
+  const newType = searchParams.get("newType");
+  const initialEditorType: TransactionType = isTransactionType(newType)
+    ? newType
+    : (duplicatedTransaction?.type ?? similarTransaction?.type ?? "EGRESO");
+  const listParams = new URLSearchParams(searchParams);
+  listParams.delete("duplicate");
+  listParams.delete("newType");
+  listParams.delete("similar");
+  const listSearch = listParams.toString();
+  const listHref = `/movimientos${listSearch ? `?${listSearch}` : ""}`;
 
-  const updateUrlCriteria = useCallback(
-    (patch: Partial<UrlCriteria>, replace = true) => {
+  useEffect(() => {
+    if (!searchParams.has("period")) {
+      const next = new URLSearchParams(searchParams);
+      next.set("period", getCurrentLimaPeriod());
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (isEditRoute && selectedTransaction?.status === "VOIDED") {
+      navigate(`/movimientos/${selectedTransaction.transactionId}${location.search}`, {
+        replace: true,
+      });
+    }
+  }, [isEditRoute, location.search, navigate, selectedTransaction]);
+
+  useEffect(() => {
+    if (catalogsQuery.data && !writable && (isNewRoute || isEditRoute)) {
+      navigate(listHref, { replace: true });
+    }
+  }, [catalogsQuery.data, isEditRoute, isNewRoute, listHref, navigate, writable]);
+
+  const updateCriteria = useCallback(
+    (patch: Partial<UrlCriteria>, searchPatch?: string | null) => {
       const nextCriteria: UrlCriteria = { ...urlCriteria, ...patch };
-      const nextParams = new URLSearchParams(searchParams);
-      setOptionalParameter(nextParams, "period", nextCriteria.period);
-      setOptionalParameter(nextParams, "type", nextCriteria.type);
-      setOptionalParameter(nextParams, "from", nextCriteria.dateFrom);
-      setOptionalParameter(nextParams, "to", nextCriteria.dateTo);
-      setOptionalParameter(nextParams, "account", nextCriteria.account);
-      setOptionalParameter(nextParams, "category", nextCriteria.category);
-      setOptionalParameter(nextParams, "status", nextCriteria.status);
-      if (nextCriteria.sort === defaultTransactionExplorerCriteria.sort) nextParams.delete("sort");
-      else nextParams.set("sort", nextCriteria.sort);
-      if (nextCriteria.page === 1) nextParams.delete("page");
-      else nextParams.set("page", String(nextCriteria.page));
-      if (nextCriteria.pageSize === defaultTransactionExplorerCriteria.pageSize) {
-        nextParams.delete("pageSize");
-      } else {
-        nextParams.set("pageSize", String(nextCriteria.pageSize));
-      }
-      setSearchParams(nextParams, { replace });
+      const next = new URLSearchParams(searchParams);
+      next.set("period", nextCriteria.period ?? "all");
+      setOptional(next, "type", nextCriteria.type);
+      setOptional(next, "from", nextCriteria.dateFrom);
+      setOptional(next, "to", nextCriteria.dateTo);
+      setOptional(next, "account", nextCriteria.account);
+      setOptional(next, "category", nextCriteria.category);
+      setOptional(next, "status", nextCriteria.status);
+      if (nextCriteria.sort === defaultTransactionExplorerCriteria.sort) next.delete("sort");
+      else next.set("sort", nextCriteria.sort);
+      if (searchPatch !== undefined) setOptional(next, "q", searchPatch);
+      next.delete("duplicate");
+      next.delete("newType");
+      next.delete("similar");
+      setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams, urlCriteria],
   );
 
-  useEffect(() => {
-    if (explorerResult && explorerResult.page !== criteria.page) {
-      updateUrlCriteria({ page: explorerResult.page });
-    }
-  }, [criteria.page, explorerResult, updateUrlCriteria]);
+  const commitSearch = useCallback(
+    (value: string) => updateCriteria({}, value || null),
+    [updateCriteria],
+  );
 
-  const updateSearch = (nextSearch: string) => {
-    setSearch(nextSearch);
-    if (urlCriteria.page !== 1) updateUrlCriteria({ page: 1 });
+  const applyFilterDraft = (draft: TransactionFilterDraft) => {
+    updateCriteria({
+      period: draft.allPeriods ? null : (urlCriteria.period ?? getCurrentLimaPeriod()),
+      dateFrom: draft.dateFrom || null,
+      dateTo: draft.dateTo || null,
+      account: draft.account || null,
+      category: draft.category || null,
+      status: draft.status || null,
+      sort: draft.sort,
+    });
+    setFiltersOpen(false);
   };
 
-  const applyAdvancedFilters = () => {
+  const clearFilters = () => {
+    updateCriteria(
+      {
+        type: null,
+        dateFrom: null,
+        dateTo: null,
+        account: null,
+        category: null,
+        status: null,
+        sort: "date-desc",
+      },
+      null,
+    );
+  };
+
+  const openRoute = (path: string, replace = false) => {
+    navigate(`${path}${location.search}`, { replace, state: { fromMovements: true } });
+  };
+  const closeSheet = () => {
+    const focusTarget = detailTrigger ?? newButtonRef.current;
+    const state = location.state;
     if (
-      advancedDraft.dateFrom &&
-      advancedDraft.dateTo &&
-      advancedDraft.dateFrom > advancedDraft.dateTo
+      typeof state === "object" &&
+      state !== null &&
+      "fromMovements" in state &&
+      state.fromMovements === true
     ) {
-      setAdvancedError("La fecha inicial debe ser anterior o igual a la fecha final.");
-      return;
-    }
-    setAdvancedError(null);
-    updateUrlCriteria({
-      dateFrom: advancedDraft.dateFrom || null,
-      dateTo: advancedDraft.dateTo || null,
-      account: advancedDraft.account || null,
-      category: advancedDraft.category || null,
-      status: advancedDraft.status || null,
-      page: 1,
+      navigate(-1);
+    } else navigate(listHref, { replace: true });
+    window.setTimeout(() => focusTarget?.focus(), 0);
+  };
+
+  const saveDraft = async (draft: Parameters<AppServices["transactions"]["create"]>[0]) => {
+    const saved =
+      isEditRoute && selectedTransaction
+        ? await services.transactions.update(
+            selectedTransaction.transactionId,
+            selectedTransaction.version,
+            draft,
+            actor,
+          )
+        : await services.transactions.create(draft, actor);
+    await queryClient.invalidateQueries();
+    const feminine = saved.type === "TRANSFERENCIA";
+    setToast({
+      message: `${getTransactionTypeLabel(saved.type)} ${isEditRoute ? (feminine ? "actualizada" : "actualizado") : feminine ? "registrada" : "registrado"}`,
+      similarTransactionId: saved.transactionId,
+    });
+    navigate(listHref, {
+      replace: true,
+      state: { fromMovements: true },
     });
   };
 
-  const clearAdvancedFilters = () => {
-    setAdvancedError(null);
-    setAdvancedDraft({ dateFrom: "", dateTo: "", account: "", category: "", status: "" });
-    updateUrlCriteria({
-      dateFrom: null,
-      dateTo: null,
-      account: null,
-      category: null,
-      status: null,
-      page: 1,
-    });
+  const voidTransaction = async (reason: string) => {
+    if (!selectedTransaction) return;
+    await services.transactions.voidTransaction(
+      selectedTransaction.transactionId,
+      selectedTransaction.version,
+      reason,
+      actor,
+    );
+    await queryClient.invalidateQueries();
+    setToast({ message: "Transacción anulada", similarTransactionId: null });
+    navigate(listHref, { replace: true });
   };
 
-  const clearAllFilters = () => {
-    setSearch("");
-    setAdvancedError(null);
-    setAdvancedDraft({ dateFrom: "", dateTo: "", account: "", category: "", status: "" });
-    updateUrlCriteria({
-      period: null,
-      type: null,
-      dateFrom: null,
-      dateTo: null,
-      account: null,
-      category: null,
-      status: null,
-      page: 1,
-    });
-  };
-
-  const openDetail = useCallback((transaction: Transaction, trigger: HTMLButtonElement) => {
-    setDetailTrigger(trigger);
-    setSelectedTransaction(transaction);
-  }, []);
-  const closeDetail = useCallback(() => setSelectedTransaction(null), []);
-
-  const advancedFilterCount = [
-    criteria.dateFrom,
-    criteria.dateTo,
-    criteria.account,
-    criteria.category,
-    criteria.status,
-  ].filter(Boolean).length;
-  const periods = useMemo(() => {
-    if (!explorerResult) return [];
-    return criteria.period && !explorerResult.facets.periods.includes(criteria.period)
-      ? [criteria.period, ...explorerResult.facets.periods]
-      : explorerResult.facets.periods;
-  }, [criteria.period, explorerResult]);
+  const activeFilterCount = countAdvancedFilters(criteria);
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
-      <section>
-        <h2 className="page-title">Movimientos</h2>
-        <p className="page-subtitle">
-          Busca, filtra y revisa las operaciones registradas sin perder el contexto.
-        </p>
+    <div className="transaction-page">
+      <header className="transaction-page-header">
+        <div>
+          <h1 className="page-title">Movimientos</h1>
+          <p className="page-subtitle">Registra y consulta las transacciones del período.</p>
+        </div>
+        <button
+          className="button-primary transaction-new-button"
+          type="button"
+          ref={newButtonRef}
+          onClick={() => {
+            setDetailTrigger(null);
+            openRoute("/movimientos/nueva");
+          }}
+          disabled={!writable}
+          title={writeReason ?? undefined}
+        >
+          <span aria-hidden="true">＋</span> Nueva
+        </button>
+      </header>
+
+      {writeReason ? <p className="transaction-write-notice">{writeReason}</p> : null}
+
+      <section className="transaction-toolbar" aria-label="Explorar movimientos">
+        <PeriodNavigator
+          period={criteria.period}
+          onChange={(period) => updateCriteria({ period })}
+        />
+        <div className="transaction-search-row">
+          <TransactionSearchControl key={search} value={search} onCommit={commitSearch} />
+          <button
+            className="button-secondary transaction-filter-button"
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            aria-label={`Abrir filtros${activeFilterCount ? `, ${activeFilterCount} aplicados` : ""}`}
+          >
+            <span aria-hidden="true">⚙</span>
+            {activeFilterCount > 0 ? (
+              <span className="transaction-filter-count">{activeFilterCount}</span>
+            ) : null}
+          </button>
+        </div>
+        <fieldset className="transaction-quick-filters">
+          <legend className="sr-only">Filtrar por tipo</legend>
+          {quickTypeOptions.map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              aria-pressed={criteria.type === option.value}
+              onClick={() => updateCriteria({ type: option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </fieldset>
+        {criteria.search || criteria.type || activeFilterCount > 0 ? (
+          <div className="transaction-active-filters" aria-label="Filtros aplicados">
+            {criteria.search ? (
+              <button type="button" onClick={() => commitSearch("")}>
+                Búsqueda: {criteria.search} <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+            {criteria.account ? (
+              <button type="button" onClick={() => updateCriteria({ account: null })}>
+                Cuenta: {criteria.account} <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+            {criteria.category ? (
+              <button type="button" onClick={() => updateCriteria({ category: null })}>
+                Categoría: {criteria.category} <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+            {criteria.status ? (
+              <button type="button" onClick={() => updateCriteria({ status: null })}>
+                Estado: {getTransactionStatusLabel(criteria.status)}{" "}
+                <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+            {criteria.period === null ? (
+              <button
+                type="button"
+                onClick={() => updateCriteria({ period: getCurrentLimaPeriod() })}
+              >
+                Todos los períodos <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+            <button className="transaction-clear-filters" type="button" onClick={clearFilters}>
+              Limpiar filtros
+            </button>
+          </div>
+        ) : null}
       </section>
 
-      {transactionsQuery.isPending ? <TransactionLoadingState /> : null}
+      {toast ? (
+        <div className="transaction-toast" role="status" aria-live="polite">
+          <span>{toast.message}</span>
+          {toast.similarTransactionId ? (
+            <button
+              type="button"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("duplicate");
+                next.delete("newType");
+                next.set("similar", toast.similarTransactionId ?? "");
+                setToast(null);
+                setDetailTrigger(null);
+                navigate(`/movimientos/nueva?${next.toString()}`, {
+                  state: { fromMovements: true },
+                });
+              }}
+            >
+              Registrar otro similar
+            </button>
+          ) : null}
+          <button type="button" onClick={() => setToast(null)} aria-label="Cerrar aviso">
+            ×
+          </button>
+        </div>
+      ) : null}
 
+      {transactionsQuery.isPending ? <TransactionLoadingState /> : null}
       {transactionsQuery.isError ? (
-        <section className="card space-y-4" aria-labelledby="transactions-error-title" role="alert">
-          <div>
-            <h3 className="section-title" id="transactions-error-title">
-              No se pudieron cargar los movimientos
-            </h3>
-            <p className="mt-2 text-sm text-slate-400">
-              Comprueba la conexión con la fuente de datos e inténtalo nuevamente.
-            </p>
-          </div>
+        <section
+          className="card transaction-error-state"
+          role="alert"
+          aria-labelledby="transactions-error-title"
+        >
+          <h2 className="section-title" id="transactions-error-title">
+            No pudimos cargar los movimientos
+          </h2>
           <button
-            className="button-primary"
+            className="button-primary mt-4"
             type="button"
             onClick={() => void transactionsQuery.refetch()}
           >
@@ -309,392 +501,133 @@ export function TransactionsPage({ services }: { services: AppServices }) {
         </section>
       ) : null}
 
-      {explorerResult ? (
-        <>
-          <section
-            className="card transaction-filter-panel"
-            aria-labelledby="transaction-filters-title"
-          >
-            <div>
-              <h3 className="section-title" id="transaction-filters-title">
-                Encuentra un movimiento
-              </h3>
-              <p className="mt-1 text-sm text-slate-400">
-                Combina la búsqueda con filtros para acotar los resultados.
+      {explorer ? (
+        <section className="transaction-results" aria-labelledby="transaction-results-title">
+          <div className="transaction-results-heading">
+            <h2 className="sr-only" id="transaction-results-title">
+              Resultados
+            </h2>
+            <p role="status" aria-live="polite">
+              {explorer.total === 1
+                ? "1 movimiento"
+                : `${explorer.total.toLocaleString("es-PE")} movimientos`}
+              {criteria.period ? ` en ${formatPeriod(criteria.period)}` : ""}
+            </p>
+          </div>
+          {transactionsQuery.data?.length === 0 ? (
+            <div className="empty-state transaction-empty-state">
+              <p className="font-medium text-slate-200">
+                {criteria.period
+                  ? `Aún no hay transacciones en ${formatPeriod(criteria.period).toLocaleLowerCase("es-PE")}`
+                  : "Aún no hay transacciones"}
               </p>
-            </div>
-
-            <form
-              className="mt-5 space-y-5"
-              role="search"
-              onSubmit={(event) => event.preventDefault()}
-            >
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_10rem]">
-                <label className="field-label">
-                  Buscar movimientos
-                  <input
-                    className="field"
-                    value={search}
-                    onChange={(event) => updateSearch(event.target.value)}
-                    placeholder="ID, descripción, cuenta, responsable o comprobante"
-                  />
-                </label>
-                <label className="field-label">
-                  Período
-                  <select
-                    className="field"
-                    value={criteria.period ?? ""}
-                    onChange={(event) =>
-                      updateUrlCriteria({ period: event.target.value || null, page: 1 })
-                    }
-                  >
-                    <option value="">Todos los períodos</option>
-                    {periods.map((period) => (
-                      <option key={period} value={period}>
-                        {formatPeriod(period)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-label">
-                  Tipo
-                  <select
-                    className="field"
-                    value={criteria.type ?? ""}
-                    onChange={(event) =>
-                      updateUrlCriteria({
-                        type: isTransactionType(event.target.value) ? event.target.value : null,
-                        page: 1,
-                      })
-                    }
-                  >
-                    <option value="">Todos los tipos</option>
-                    <option value="INGRESO">Ingreso</option>
-                    <option value="EGRESO">Egreso</option>
-                    <option value="TRANSFERENCIA">Transferencia</option>
-                  </select>
-                </label>
-              </div>
-
-              <details
-                className="transaction-advanced-filters"
-                open={advancedOpen}
-                onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
-              >
-                <summary>
-                  Más filtros{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ""}
-                </summary>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                  <label className="field-label">
-                    Desde
-                    <input
-                      className="field"
-                      type="date"
-                      value={advancedDraft.dateFrom}
-                      onChange={(event) => {
-                        setAdvancedError(null);
-                        setAdvancedDraft((draft) => ({ ...draft, dateFrom: event.target.value }));
-                      }}
-                      aria-invalid={advancedError ? true : undefined}
-                      aria-describedby={advancedError ? "transaction-date-error" : undefined}
-                    />
-                  </label>
-                  <label className="field-label">
-                    Hasta
-                    <input
-                      className="field"
-                      type="date"
-                      value={advancedDraft.dateTo}
-                      onChange={(event) => {
-                        setAdvancedError(null);
-                        setAdvancedDraft((draft) => ({ ...draft, dateTo: event.target.value }));
-                      }}
-                      aria-invalid={advancedError ? true : undefined}
-                      aria-describedby={advancedError ? "transaction-date-error" : undefined}
-                    />
-                  </label>
-                  <label className="field-label">
-                    Cuenta
-                    <select
-                      className="field"
-                      value={advancedDraft.account}
-                      onChange={(event) =>
-                        setAdvancedDraft((draft) => ({ ...draft, account: event.target.value }))
-                      }
-                    >
-                      <option value="">Todas</option>
-                      {explorerResult.facets.accounts.map((account) => (
-                        <option key={account} value={account}>
-                          {account}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    Categoría
-                    <select
-                      className="field"
-                      value={advancedDraft.category}
-                      onChange={(event) =>
-                        setAdvancedDraft((draft) => ({ ...draft, category: event.target.value }))
-                      }
-                    >
-                      <option value="">Todas</option>
-                      {explorerResult.facets.categories.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    Estado
-                    <select
-                      className="field"
-                      value={advancedDraft.status}
-                      onChange={(event) =>
-                        setAdvancedDraft((draft) => ({ ...draft, status: event.target.value }))
-                      }
-                    >
-                      <option value="">Todos</option>
-                      {explorerResult.facets.statuses.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {advancedError ? (
-                  <p className="transaction-filter-error" id="transaction-date-error" role="alert">
-                    {advancedError}
-                  </p>
-                ) : null}
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button className="button-primary" type="button" onClick={applyAdvancedFilters}>
-                    Aplicar filtros
-                  </button>
-                  <button className="button-secondary" type="button" onClick={clearAdvancedFilters}>
-                    Limpiar avanzados
-                  </button>
-                </div>
-              </details>
-            </form>
-
-            {hasFilters(criteria) ? (
-              <div
-                className="mt-5 flex flex-wrap items-center gap-2"
-                aria-label="Filtros aplicados"
-              >
-                <span className="text-xs font-medium text-slate-500">Filtros activos:</span>
-                {criteria.period ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => updateUrlCriteria({ period: null, page: 1 })}
-                  >
-                    Período: {formatPeriod(criteria.period)} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.type ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => updateUrlCriteria({ type: null, page: 1 })}
-                  >
-                    Tipo: {getTransactionTypeLabel(criteria.type)} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.dateFrom ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => {
-                      setAdvancedDraft((draft) => ({ ...draft, dateFrom: "" }));
-                      updateUrlCriteria({ dateFrom: null, page: 1 });
-                    }}
-                  >
-                    Desde: {criteria.dateFrom} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.dateTo ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => {
-                      setAdvancedDraft((draft) => ({ ...draft, dateTo: "" }));
-                      updateUrlCriteria({ dateTo: null, page: 1 });
-                    }}
-                  >
-                    Hasta: {criteria.dateTo} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.account ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => {
-                      setAdvancedDraft((draft) => ({ ...draft, account: "" }));
-                      updateUrlCriteria({ account: null, page: 1 });
-                    }}
-                  >
-                    Cuenta: {criteria.account} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.category ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => {
-                      setAdvancedDraft((draft) => ({ ...draft, category: "" }));
-                      updateUrlCriteria({ category: null, page: 1 });
-                    }}
-                  >
-                    Categoría: {criteria.category} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.status ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => {
-                      setAdvancedDraft((draft) => ({ ...draft, status: "" }));
-                      updateUrlCriteria({ status: null, page: 1 });
-                    }}
-                  >
-                    Estado: {criteria.status} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
-                {criteria.search ? (
-                  <button
-                    className="transaction-filter-chip"
-                    type="button"
-                    onClick={() => updateSearch("")}
-                  >
-                    Búsqueda: {criteria.search} <span aria-hidden="true">×</span>
-                  </button>
-                ) : null}
+              {writable ? (
                 <button
-                  className="text-xs font-medium text-emerald-300 hover:text-emerald-200"
+                  className="button-primary mt-5"
                   type="button"
-                  onClick={clearAllFilters}
+                  onClick={() => openRoute("/movimientos/nueva")}
                 >
-                  Limpiar filtros
+                  Registrar primera transacción
                 </button>
-              </div>
-            ) : null}
-          </section>
-
-          <section aria-labelledby="transactions-title">
-            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h3 className="section-title" id="transactions-title">
-                  Resultados
-                </h3>
-                <p className="mt-1 text-sm text-slate-400" role="status" aria-live="polite">
-                  {explorerResult.total === 1
-                    ? "1 movimiento encontrado"
-                    : `${explorerResult.total.toLocaleString("es-PE")} movimientos encontrados`}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end">
-                <label className="field-label">
-                  Ordenar por
-                  <select
-                    className="field"
-                    value={criteria.sort}
-                    onChange={(event) =>
-                      updateUrlCriteria({ sort: readSort(event.target.value), page: 1 })
-                    }
-                  >
-                    {sortOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-label">
-                  Por página
-                  <select
-                    className="field"
-                    value={criteria.pageSize}
-                    onChange={(event) =>
-                      updateUrlCriteria({ pageSize: readPageSize(event.target.value), page: 1 })
-                    }
-                  >
-                    {transactionPageSizes.map((pageSize) => (
-                      <option key={pageSize} value={pageSize}>
-                        {pageSize}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              ) : null}
             </div>
-
-            {transactionsQuery.data?.length === 0 ? (
-              <div className="empty-state">
-                <p className="font-medium text-slate-200">Aún no hay movimientos registrados.</p>
-                <p className="mt-2">Cuando la fuente tenga datos válidos, aparecerán aquí.</p>
-              </div>
-            ) : explorerResult.total === 0 ? (
-              <div className="empty-state">
-                <p className="font-medium text-slate-200">
-                  No encontramos movimientos con esos filtros.
-                </p>
-                <p className="mt-2">
-                  Prueba con una búsqueda distinta o limpia los filtros aplicados.
-                </p>
-                <button className="button-secondary mt-5" type="button" onClick={clearAllFilters}>
-                  Limpiar filtros
-                </button>
-              </div>
-            ) : (
-              <>
-                <TransactionResults
-                  transactions={explorerResult.transactions}
-                  onViewDetails={openDetail}
-                />
-                <nav className="transaction-pagination" aria-label="Paginación de movimientos">
-                  <p className="text-sm text-slate-400">
-                    Mostrando {(explorerResult.page - 1) * explorerResult.pageSize + 1}–
-                    {Math.min(explorerResult.page * explorerResult.pageSize, explorerResult.total)}{" "}
-                    de {explorerResult.total.toLocaleString("es-PE")}
+          ) : explorer.total === 0 ? (
+            <div className="empty-state transaction-empty-state">
+              <p className="font-medium text-slate-200">
+                No encontramos movimientos con esos criterios
+              </p>
+              <button className="button-secondary mt-5" type="button" onClick={clearFilters}>
+                Limpiar filtros
+              </button>
+            </div>
+          ) : (
+            <>
+              <TransactionList
+                transactions={explorer.transactions}
+                onOpen={(transaction: LogicalTransaction, trigger: HTMLButtonElement) => {
+                  setDetailTrigger(trigger);
+                  openRoute(`/movimientos/${transaction.transactionId}`);
+                }}
+              />
+              {explorer.transactions.length < explorer.total ? (
+                <div className="transaction-load-more">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() =>
+                      setPagination((current) => ({
+                        key: paginationKey,
+                        count: (current.key === paginationKey ? current.count : 30) + 30,
+                      }))
+                    }
+                  >
+                    Mostrar más
+                  </button>
+                  <p>
+                    Mostrando {explorer.transactions.length} de {explorer.total}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="button-secondary transaction-pagination-button"
-                      type="button"
-                      disabled={explorerResult.page === 1}
-                      onClick={() => updateUrlCriteria({ page: explorerResult.page - 1 }, false)}
-                    >
-                      Anterior
-                    </button>
-                    <span className="px-1 text-sm text-slate-300" aria-current="page">
-                      Página {explorerResult.page} de {explorerResult.totalPages}
-                    </span>
-                    <button
-                      className="button-secondary transaction-pagination-button"
-                      type="button"
-                      disabled={explorerResult.page === explorerResult.totalPages}
-                      onClick={() => updateUrlCriteria({ page: explorerResult.page + 1 }, false)}
-                    >
-                      Siguiente
-                    </button>
-                  </div>
-                </nav>
-              </>
-            )}
-          </section>
-        </>
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
       ) : null}
 
-      <TransactionDetailDialog
+      {explorer && filtersOpen ? (
+        <TransactionFilterSheet
+          open={filtersOpen}
+          criteria={criteria}
+          facets={explorer.facets}
+          onClose={() => setFiltersOpen(false)}
+          onApply={applyFilterDraft}
+        />
+      ) : null}
+
+      <TransactionDetailSheet
+        open={isDetailRoute}
         transaction={selectedTransaction}
-        returnFocusTo={detailTrigger}
-        onClose={closeDetail}
+        onClose={closeSheet}
+        onEdit={() =>
+          selectedTransaction &&
+          openRoute(`/movimientos/${selectedTransaction.transactionId}/editar`, true)
+        }
+        onDuplicate={() => {
+          if (!selectedTransaction) return;
+          const next = new URLSearchParams(searchParams);
+          next.set("duplicate", selectedTransaction.transactionId);
+          navigate(`/movimientos/nueva?${next.toString()}`, {
+            replace: true,
+            state: { fromMovements: true },
+          });
+        }}
+        onVoid={voidTransaction}
+        writable={writable}
+        writeReason={writeReason}
       />
+
+      {catalogsQuery.data && writable && (isNewRoute || isEditRoute) ? (
+        <TransactionEditorSheet
+          key={`${isEditRoute ? "edit" : duplicatedTransaction ? "duplicate" : similarTransaction ? "similar" : "create"}-${selectedTransaction?.transactionId ?? duplicatedTransaction?.transactionId ?? similarTransaction?.transactionId ?? initialEditorType}`}
+          open={isNewRoute || isEditRoute}
+          mode={
+            isEditRoute
+              ? "edit"
+              : duplicatedTransaction
+                ? "duplicate"
+                : similarTransaction
+                  ? "similar"
+                  : "create"
+          }
+          initialType={initialEditorType}
+          transaction={
+            isEditRoute ? selectedTransaction : (duplicatedTransaction ?? similarTransaction)
+          }
+          catalogs={catalogsQuery.data}
+          actor={actor}
+          onClose={closeSheet}
+          onSave={saveDraft}
+        />
+      ) : null}
     </div>
   );
 }

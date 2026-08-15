@@ -22,7 +22,11 @@ import type {
   DashboardTrendPoint,
 } from "../../domain/dashboard";
 import { getIncomeGroup, normalizeCategory } from "../../domain/income-groups";
-import { getTransactionAccountDelta, type Transaction } from "../../domain/transaction";
+import {
+  getTransactionAccountDelta,
+  isTransactionIncludedInCalculations,
+  type Transaction,
+} from "../../domain/transaction";
 import type { TransactionRepository } from "../ports/transaction-repository";
 
 const dashboardPeriodPattern = /^\d{6}$/;
@@ -640,11 +644,15 @@ export class GetDashboardOverviewUseCase {
   public constructor(private readonly repository: TransactionRepository) {}
 
   public async execute(requestedPeriod?: string): Promise<DashboardOverview> {
-    const [availablePeriodsResult, inspection] = await Promise.all([
-      this.repository.getAvailablePeriods(),
-      this.repository.inspect(),
-    ]);
-    const availablePeriods = [...new Set(availablePeriodsResult)].sort().reverse();
+    const inspection = await this.repository.inspect();
+    const financialTransactions = inspection.transactions.filter(
+      isTransactionIncludedInCalculations,
+    );
+    const availablePeriods = [
+      ...new Set(financialTransactions.map((transaction) => transaction.period)),
+    ]
+      .sort()
+      .reverse();
     const validRequestedPeriod =
       requestedPeriod && dashboardPeriodPattern.test(requestedPeriod) ? requestedPeriod : null;
     const selectedPeriod =
@@ -652,11 +660,11 @@ export class GetDashboardOverviewUseCase {
         ? validRequestedPeriod
         : (availablePeriods[0] ?? null);
     const selectedTransactions = selectedPeriod
-      ? await this.repository.findAll({ period: selectedPeriod })
+      ? financialTransactions.filter((transaction) => transaction.period === selectedPeriod)
       : [];
     const transactionsByPeriod = new Map<string, Transaction[]>();
 
-    for (const transaction of inspection.transactions) {
+    for (const transaction of financialTransactions) {
       const current = transactionsByPeriod.get(transaction.period) ?? [];
       current.push(transaction);
       transactionsByPeriod.set(transaction.period, current);
@@ -690,7 +698,7 @@ export class GetDashboardOverviewUseCase {
     }
 
     const summary = createPeriodSummary(selectedPeriod, selectedTransactions);
-    const accumulatedTransactions = inspection.transactions.filter(
+    const accumulatedTransactions = financialTransactions.filter(
       (transaction) => transaction.period <= selectedPeriod,
     );
     const accumulated = getAccumulatedSummary(accumulatedTransactions);
@@ -714,7 +722,7 @@ export class GetDashboardOverviewUseCase {
       comparison: getPeriodComparison(
         selectedPeriod,
         availablePeriods[0] ?? null,
-        inspection.transactions,
+        financialTransactions,
         transactionsByPeriod,
         dataCutoff,
         summary,
@@ -724,7 +732,7 @@ export class GetDashboardOverviewUseCase {
       incomeBreakdown,
       periodDailyTrend,
       periodIncomeBehavior,
-      trend: getAnnualTrend(trendPeriods, transactionsByPeriod, inspection.transactions),
+      trend: getAnnualTrend(trendPeriods, transactionsByPeriod, financialTransactions),
       incomeCategories: getIncomeCategories(selectedTransactions),
       expenseComposition: getExpenseComposition(selectedTransactions),
       expenseCategories: groupMainCategories(allNonSalaryExpenseCategories),

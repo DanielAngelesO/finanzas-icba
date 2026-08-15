@@ -1,15 +1,21 @@
 import type { TransactionRepository } from "../ports/transaction-repository";
-import type { BasicFinancialSummary } from "../../domain/transaction";
+import {
+  isTransactionIncludedInCalculations,
+  type BasicFinancialSummary,
+} from "../../domain/transaction";
 
 export class GetBasicFinancialSummaryUseCase {
   public constructor(private readonly repository: TransactionRepository) {}
 
   public async execute(): Promise<BasicFinancialSummary> {
     const inspection = await this.repository.inspect();
-    const income = inspection.transactions
+    const financialTransactions = inspection.transactions.filter(
+      isTransactionIncludedInCalculations,
+    );
+    const income = financialTransactions
       .filter((transaction) => transaction.type === "INGRESO")
       .reduce((total, transaction) => total + transaction.amount, 0);
-    const expense = inspection.transactions
+    const expense = financialTransactions
       .filter((transaction) => transaction.type === "EGRESO")
       .reduce((total, transaction) => total + transaction.amount, 0);
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const authSessionStorageKey = "finanzas-icba.google-oauth-session.v1";
+export const authSessionStorageKey = "finanzas-icba.google-oauth-session.v2";
 export const authSessionExpirySkewMs = 60_000;
 
 const authSessionSchema = z

@@ -395,10 +395,14 @@ describe("navegación principal", () => {
     ]);
     renderApp("/movimientos?type=TRANSFERENCIA", services);
 
-    expect(await screen.findByRole("status")).toHaveTextContent("2 movimientos encontrados");
-    expect(screen.getByRole("combobox", { name: "Tipo" })).toHaveValue("TRANSFERENCIA");
-    expect(screen.getAllByLabelText("Transferencia")).not.toHaveLength(0);
-    expect(screen.getAllByText("↔")).not.toHaveLength(0);
+    expect(await screen.findByRole("status")).toHaveTextContent("1 movimiento");
+    expect(screen.getByRole("button", { name: "Transferencias" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.getAllByRole("button", { name: /Transferencia: Traslado a caja chica/ }),
+    ).not.toHaveLength(0);
   });
 
   it("muestra transferencias neutrales con su flujo en la actividad reciente", async () => {
@@ -763,7 +767,7 @@ describe("explorador de movimientos", () => {
       category: "Ofrendas",
       account: "Caja",
       amount: 320,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period: "202608",
     }),
     makeTransaction({
@@ -774,7 +778,7 @@ describe("explorador de movimientos", () => {
       category: "Ayuda social",
       account: "Banco",
       amount: 150,
-      status: "Pendiente",
+      status: "PENDING",
       period: "202608",
     }),
     makeTransaction({
@@ -785,7 +789,7 @@ describe("explorador de movimientos", () => {
       category: "DIEZMOS",
       account: "Caja",
       amount: 200,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period: "202607",
     }),
     makeTransaction({
@@ -795,7 +799,7 @@ describe("explorador de movimientos", () => {
       category: "Diezmo",
       account: "Caja",
       amount: 100,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period: "202607",
     }),
     makeTransaction({
@@ -806,7 +810,7 @@ describe("explorador de movimientos", () => {
       category: "Diezmo",
       account: "Caja",
       amount: 75,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period: "202607",
     }),
     makeTransaction({
@@ -816,7 +820,7 @@ describe("explorador de movimientos", () => {
       category: "ofrendas",
       account: "Caja",
       amount: 50,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period: "202607",
     }),
   ];
@@ -825,15 +829,15 @@ describe("explorador de movimientos", () => {
     const user = userEvent.setup();
     renderApp("/movimientos?period=202608", createServices(explorerTransactions));
 
-    const period = await screen.findByRole("combobox", { name: "Período" });
-    expect(period).toHaveValue("202608");
-    expect(screen.getByRole("status")).toHaveTextContent("2 movimientos encontrados");
+    const period = await screen.findByLabelText("Seleccionar mes y año");
+    expect(period).toHaveValue("2026-08");
+    expect(await screen.findByRole("status")).toHaveTextContent("2 movimientos en agosto de 2026");
 
     await user.clear(screen.getByRole("textbox", { name: "Buscar movimientos" }));
     await user.type(screen.getByRole("textbox", { name: "Buscar movimientos" }), "maria alvarez");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("1 movimiento encontrado");
+      expect(screen.getByRole("status")).toHaveTextContent("1 movimiento en agosto de 2026");
     });
   });
 
@@ -841,49 +845,40 @@ describe("explorador de movimientos", () => {
     const user = userEvent.setup();
     renderApp("/movimientos", createServices(explorerTransactions));
 
-    const advancedFilters = await screen.findByText("Más filtros");
-    await user.click(advancedFilters);
-    fireEvent.change(screen.getByLabelText("Desde"), { target: { value: "2026-08-20" } });
-    fireEvent.change(screen.getByLabelText("Hasta"), { target: { value: "2026-08-01" } });
-    await user.click(screen.getByRole("button", { name: "Aplicar filtros" }));
+    const filterButton = await screen.findByRole("button", { name: "Abrir filtros" });
+    await user.click(filterButton);
+    const filterDialog = screen.getByRole("dialog", { name: "Filtros" });
+    fireEvent.change(within(filterDialog).getByLabelText("Desde"), {
+      target: { value: "2026-08-20" },
+    });
+    fireEvent.change(within(filterDialog).getByLabelText("Hasta"), {
+      target: { value: "2026-08-01" },
+    });
+    await user.click(within(filterDialog).getByRole("button", { name: "Aplicar filtros" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "La fecha inicial debe ser anterior o igual a la fecha final.",
     );
   });
 
-  it("muestra el nombre directamente solo en los previews de diezmos con donante", async () => {
-    renderApp("/movimientos", createServices(explorerTransactions));
+  it("presenta filas densas sin exponer terceros en el listado", async () => {
+    renderApp("/movimientos?period=202607", createServices(explorerTransactions));
 
-    const mobileResults = await screen.findByRole("list", { name: "Movimientos encontrados" });
-    expect(within(mobileResults).getByText("DIEZMOS")).toBeInTheDocument();
-    expect(within(mobileResults).getByText("Ana Quispe")).toBeInTheDocument();
-    expect(screen.getAllByText("Ana Quispe")).toHaveLength(2);
-    const donorOnlyPreview = within(mobileResults).getByText("Carlos Ríos").closest("p");
-    if (!donorOnlyPreview) throw new Error("No se encontró el preview del donante.");
-    expect(donorOnlyPreview).toHaveAttribute("title", "Carlos Ríos");
-    expect(screen.queryByText("María Álvarez")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Donante:/)).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Ingreso: Aporte de julio/ }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("DIEZMOS")).not.toHaveLength(0);
+    expect(screen.queryByText("Ana Quispe")).not.toBeInTheDocument();
+    expect(screen.queryByText("Carlos Ríos")).not.toBeInTheDocument();
   });
 
-  it("muestra la fecha de las ofrendas en una línea posterior a la categoría", async () => {
-    renderApp("/movimientos", createServices(explorerTransactions));
+  it("agrupa el listado móvil por día y mantiene categoría y cuenta como contexto", async () => {
+    renderApp("/movimientos?period=202607", createServices(explorerTransactions));
 
-    const mobileResults = await screen.findByRole("list", { name: "Movimientos encontrados" });
-    const offeringCard = within(mobileResults).getByText("Ofrenda de misión").closest("article");
-    if (!offeringCard) throw new Error("No se encontró la ofrenda.");
-    const categoryLine = within(offeringCard).getByText("Ofrendas").closest("p");
-    const dateLine = within(offeringCard).getByText("Martes 18/08").closest("p");
-    if (!categoryLine || !dateLine) throw new Error("No se encontró el preview de la ofrenda.");
-    expect(categoryLine.nextElementSibling).toBe(dateLine);
-
-    const offeringDateOnly = within(mobileResults)
-      .getByText("Domingo 26/07")
-      .closest(".transaction-preview");
-    if (!offeringDateOnly)
-      throw new Error("No se encontró la fecha de la ofrenda sin descripción.");
-    expect(offeringDateOnly).toHaveTextContent("Domingo 26/07");
-    expect(offeringDateOnly).not.toHaveTextContent("ofrendas");
+    expect(await screen.findByRole("heading", { name: /31.*JULIO/ })).toBeInTheDocument();
+    const offering = screen.getByRole("button", { name: /Ingreso: ofrendas/ });
+    expect(offering).toHaveTextContent("Caja");
+    expect(offering).toHaveTextContent("ofrendas");
   });
 
   it("abre el detalle completo y devuelve el foco al activador al cerrar con Escape", async () => {
@@ -891,29 +886,27 @@ describe("explorador de movimientos", () => {
     renderApp("/movimientos", createServices(explorerTransactions));
 
     await screen.findByRole("status");
-    const detailButtons = screen.getAllByRole("button", {
-      name: "Ver detalle de Ofrenda de misión",
-    });
+    const detailButtons = screen.getAllByRole("button", { name: /Ingreso: Ofrenda de misión/ });
     const detailButton = detailButtons[0];
     if (!detailButton) throw new Error("No se encontró el activador del detalle.");
     await user.click(detailButton);
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("dialog", { name: "Ofrenda de misión" });
     expect(within(dialog).getByText("Trazabilidad")).toBeInTheDocument();
     expect(within(dialog).getByText("Donante / Proveedor")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Cerrar" })).toHaveFocus();
+    expect(within(dialog).getByRole("button", { name: "Cerrar detalle" })).toHaveFocus();
 
     await user.keyboard("{Escape}");
 
     await waitFor(() => {
-      expect(dialog).not.toHaveAttribute("open");
+      expect(dialog).not.toBeInTheDocument();
       expect(detailButton).toHaveFocus();
     });
   });
 
-  it("pagina resultados y conserva el rango visible", async () => {
+  it("carga treinta resultados y permite mostrar el siguiente bloque", async () => {
     const user = userEvent.setup();
-    const manyTransactions = Array.from({ length: 21 }, (_, index) =>
+    const manyTransactions = Array.from({ length: 35 }, (_, index) =>
       makeTransaction({
         id: `TX-${String(index + 1).padStart(2, "0")}`,
         date: new Date(Date.UTC(2026, 7, index + 1, 5)),
@@ -923,13 +916,45 @@ describe("explorador de movimientos", () => {
     );
     renderApp("/movimientos", createServices(manyTransactions));
 
-    expect(await screen.findByText("21 movimientos encontrados")).toBeInTheDocument();
-    expect(screen.getByText("Mostrando 1–20 de 21")).toBeInTheDocument();
+    expect(await screen.findByText("35 movimientos en agosto de 2026")).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 30 de 35")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Siguiente" }));
+    await user.click(screen.getByRole("button", { name: "Mostrar más" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Mostrando 21–21 de 21")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Mostrar más" })).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /Movimiento/ }).length).toBeGreaterThan(34);
     });
+  });
+
+  it("crea un egreso desde la sheet y conserva el borrador al validar", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    const newButton = await screen.findByRole("button", { name: "Nueva" });
+    await waitFor(() => expect(newButton).toBeEnabled());
+    await user.click(newButton);
+
+    const editor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+    const amount = within(editor).getByLabelText(/Monto/);
+    await user.click(within(editor).getByRole("button", { name: "Guardar egreso" }));
+    expect(within(editor).getByRole("alert")).toHaveTextContent(
+      "Revisa los campos indicados antes de guardar.",
+    );
+    expect(amount).toHaveFocus();
+
+    await user.type(amount, "85.50");
+    await user.type(within(editor).getByLabelText("Descripción"), "Compra urgente");
+    await user.click(within(editor).getByRole("button", { name: "Guardar egreso" }));
+
+    expect(await screen.findByText("Egreso registrado")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Egreso: Compra urgente/ }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Registrar otro similar" }));
+    const similarEditor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+    expect(within(similarEditor).getByLabelText(/Monto/)).toHaveValue("");
+    expect(within(similarEditor).getByLabelText("Descripción")).toHaveValue("");
   });
 });

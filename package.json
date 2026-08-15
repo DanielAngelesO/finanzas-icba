@@ -16,7 +16,8 @@
     "version:major": "npm version major --no-git-tag-version",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run -c vitest.integration.config.ts --passWithNoTests"
+    "test:integration": "vitest run -c vitest.integration.config.ts --passWithNoTests",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "latest",
@@ -28,7 +29,9 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "latest",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "latest",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",

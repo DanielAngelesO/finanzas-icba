@@ -111,6 +111,39 @@ const parseType = (value: GoogleCell | undefined): TransactionType | null => {
   return null;
 };
 
+const parseStatus = (value: GoogleCell | undefined): Transaction["status"] | null => {
+  const normalized = normalizeText(value)
+    ?.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  if (normalized === "CONFIRMED" || normalized === "CONFIRMADO" || normalized === "CONFIRMADA") {
+    return "CONFIRMED";
+  }
+  if (normalized === "PENDING" || normalized === "PENDIENTE") return "PENDING";
+  if (
+    normalized === "VOIDED" ||
+    normalized === "ANULADO" ||
+    normalized === "ANULADA" ||
+    normalized === "CANCELADO" ||
+    normalized === "CANCELADA"
+  ) {
+    return "VOIDED";
+  }
+  return null;
+};
+
+const parseAuditDate = (value: GoogleCell | undefined): Date | null => {
+  const text = normalizeText(value);
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const parseVersion = (value: GoogleCell | undefined): number => {
+  const numeric = typeof value === "number" ? value : Number(normalizeText(value));
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : 1;
+};
+
 const parseAmount = (
   value: GoogleCell | undefined,
   decimalSeparator: "." | ",",
@@ -233,6 +266,12 @@ const validateTransferPairs = (candidates: Candidate[]): void => {
     ) {
       addTransferPairIssue(group, transferId, "ambas filas deben pertenecer al mismo período");
     }
+    if (
+      originOrDestination.transaction?.status !== counterpart.transaction?.status ||
+      originOrDestination.transaction?.version !== counterpart.transaction?.version
+    ) {
+      addTransferPairIssue(group, transferId, "ambas filas deben compartir estado y versión");
+    }
   });
 };
 
@@ -329,8 +368,9 @@ export class GoogleSheetsTransactionMapper {
       const category = normalizeText(read("category"));
       const responsible = normalizeText(read("responsible"));
       const paymentMethod = normalizeText(read("paymentMethod"));
-      const status = normalizeText(read("status"));
-      const transferId = type === "TRANSFERENCIA" ? normalizeText(read("transferId")) : null;
+      const status = parseStatus(read("status"));
+      const logicalId = normalizeText(read("transactionId"));
+      const transferId = type === "TRANSFERENCIA" ? logicalId : null;
       const accountFlow =
         type && parsedAmount ? getAccountFlow(type, parsedAmount.rawAmount) : null;
 
@@ -377,6 +417,17 @@ export class GoogleSheetsTransactionMapper {
             "Monto",
           ),
         );
+      if (!status) {
+        rowIssues.push(
+          issue(
+            "INVALID_REQUIRED_VALUE",
+            "error",
+            "Estado debe ser confirmado, pendiente o anulado.",
+            rowNumber,
+            "Estado",
+          ),
+        );
+      }
       if (periodValue && !/^\d{6}$/.test(periodValue)) {
         rowIssues.push(
           issue(
@@ -456,6 +507,8 @@ export class GoogleSheetsTransactionMapper {
       ) {
         const parsed = transactionSchema.safeParse({
           id,
+          transactionId: logicalId ?? id,
+          rowNumber,
           date,
           type,
           accountFlow,
@@ -472,6 +525,16 @@ export class GoogleSheetsTransactionMapper {
           status,
           period,
           notes: normalizeText(read("notes")),
+          version: parseVersion(read("version")),
+          createdAt: parseAuditDate(read("createdAt")),
+          createdBy: normalizeText(read("createdBy")),
+          updatedAt: parseAuditDate(read("updatedAt")),
+          updatedBy: normalizeText(read("updatedBy")),
+          voidedAt: parseAuditDate(read("voidedAt")),
+          voidedBy: normalizeText(read("voidedBy")),
+          voidReason: normalizeText(read("voidReason")),
+          correctsTransactionId: normalizeText(read("correctsTransactionId")),
+          correctedBy: normalizeText(read("correctedBy")),
         });
         if (parsed.success) {
           candidate.transaction = parsed.data;

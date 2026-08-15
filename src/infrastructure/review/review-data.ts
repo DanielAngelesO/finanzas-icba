@@ -19,22 +19,53 @@ const reviewPeriods = [
 const monthDate = (period: string, day: number): Date =>
   new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(4, 6)) - 1, day, 12));
 
-type ReviewTransaction = Omit<Transaction, "accountFlow" | "transferId"> & {
+type ReviewTransaction = Omit<
+  Transaction,
+  | "accountFlow"
+  | "transferId"
+  | "transactionId"
+  | "rowNumber"
+  | "version"
+  | "createdAt"
+  | "createdBy"
+  | "updatedAt"
+  | "updatedBy"
+  | "voidedAt"
+  | "voidedBy"
+  | "voidReason"
+  | "correctsTransactionId"
+  | "correctedBy"
+> & {
   accountFlow?: AccountFlow;
   transferId?: string | null;
 };
 
-const createTransaction = (transaction: ReviewTransaction): Transaction => ({
-  ...transaction,
-  accountFlow: transaction.accountFlow ?? (transaction.type === "EGRESO" ? "OUTFLOW" : "INFLOW"),
-  transferId: transaction.transferId ?? null,
-});
+const createTransaction = (transaction: ReviewTransaction): Transaction => {
+  const transferId = transaction.transferId ?? null;
+  return {
+    ...transaction,
+    accountFlow: transaction.accountFlow ?? (transaction.type === "EGRESO" ? "OUTFLOW" : "INFLOW"),
+    transferId,
+    transactionId: transferId ?? transaction.id,
+    rowNumber: null,
+    version: 1,
+    createdAt: null,
+    createdBy: null,
+    updatedAt: null,
+    updatedBy: null,
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+    correctsTransactionId: null,
+    correctedBy: null,
+  };
+};
 
 const createPeriodTransactions = (period: string, index: number): Transaction[] => {
   const serviceReference = index === 4 || index === 8 ? "REV-SERVICIO-COMUN" : `REV-${period}-SERV`;
   const cashReference = index % 3 === 0 ? null : `REV-${period}-CAJA`;
   const cashMethod = index % 2 === 0 ? "Efectivo" : "Transferencia";
-  const status = index % 4 === 0 ? "Pendiente" : "Confirmado";
+  const status = index % 4 === 0 ? "PENDING" : "CONFIRMED";
 
   return [
     createTransaction({
@@ -50,7 +81,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Transferencia",
       referenceOrReceipt: `REV-${period}-IN-01`,
       amount: 900 + index * 25,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: "Dato sintético",
     }),
@@ -67,7 +98,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Transferencia",
       referenceOrReceipt: `REV-${period}-IN-02`,
       amount: 1_350 + index * 45,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: null,
     }),
@@ -84,7 +115,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Yape",
       referenceOrReceipt: `REV-${period}-IN-03`,
       amount: 480 + index * 10,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: null,
     }),
@@ -103,7 +134,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Transferencia",
       referenceOrReceipt: `REV-${period}-TRANSFER-01`,
       amount: 360 + index * 10,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: null,
     }),
@@ -122,7 +153,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Transferencia",
       referenceOrReceipt: `REV-${period}-TRANSFER-01`,
       amount: 360 + index * 10,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: null,
     }),
@@ -156,7 +187,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Transferencia",
       referenceOrReceipt: serviceReference,
       amount: 420 + index * 12,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: null,
     }),
@@ -173,7 +204,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: "Tarjeta",
       referenceOrReceipt: `REV-${period}-MAT`,
       amount: 180 + index * 7,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: null,
     }),
@@ -190,7 +221,7 @@ const createPeriodTransactions = (period: string, index: number): Transaction[] 
       paymentMethod: cashMethod,
       referenceOrReceipt: cashReference,
       amount: 90 + index * 5,
-      status: "Confirmado",
+      status: "CONFIRMED",
       period,
       notes: "Revisar comprobante en modo de prueba",
     }),

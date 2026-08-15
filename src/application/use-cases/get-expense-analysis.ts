@@ -15,7 +15,7 @@ import type {
   ExpenseTrendPoint,
 } from "../../domain/expense-analysis";
 import { defaultExpenseAnalysisCriteria, expensePageSizes } from "../../domain/expense-analysis";
-import type { Transaction } from "../../domain/transaction";
+import { isTransactionIncludedInCalculations, type Transaction } from "../../domain/transaction";
 import type { TransactionRepository } from "../ports/transaction-repository";
 
 const periodPattern = /^\d{6}$/;
@@ -387,10 +387,15 @@ export class GetExpenseAnalysisUseCase {
     const inspection = await this.repository.inspect();
     const capabilities = getCapabilities(inspection);
     const allExpenses = inspection.transactions.filter(
-      (transaction) => transaction.type === "EGRESO",
+      (transaction) =>
+        transaction.type === "EGRESO" && isTransactionIncludedInCalculations(transaction),
     );
     const availablePeriods = [
-      ...new Set(inspection.transactions.map((transaction) => transaction.period)),
+      ...new Set(
+        inspection.transactions
+          .filter(isTransactionIncludedInCalculations)
+          .map((transaction) => transaction.period),
+      ),
     ]
       .sort()
       .reverse();

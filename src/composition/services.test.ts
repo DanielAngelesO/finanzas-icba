@@ -22,7 +22,10 @@ describe("createReviewServices", () => {
     ]);
 
     const transactions = await services.transactions.findAll();
-    expect(transactions).toHaveLength(108);
+    expect(transactions).toHaveLength(96);
+    expect(transactions.filter((transaction) => transaction.type === "TRANSFERENCIA")).toHaveLength(
+      12,
+    );
   });
 
   it("incluye señales de revisión y problemas de calidad deterministas", async () => {

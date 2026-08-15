@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { Transaction } from "../../domain/transaction";
+import { getTransactionStatusLabel, type Transaction } from "../../domain/transaction";
 import { formatCompactDate, formatMoney } from "../formatters";
 
 const getTransactionTypeLabel = (transaction: Transaction): string => {
@@ -63,7 +63,7 @@ export function RecentTransactionList({
                 </p>
                 <p className="mt-0.5 truncate text-xs text-slate-500">
                   {formatCompactDate(transaction.date)} · {transaction.category} ·{" "}
-                  {transaction.status}
+                  {getTransactionStatusLabel(transaction.status)}
                 </p>
               </div>
               <span

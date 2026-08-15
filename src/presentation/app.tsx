@@ -65,6 +65,15 @@ export function AppRoutes({ services }: { services: AppServices }) {
         <Route index element={<HomePage services={services} />} />
         <Route path="resumen" element={<DashboardPage services={services} />} />
         <Route path="movimientos" element={<TransactionsPage services={services} />} />
+        <Route path="movimientos/nueva" element={<TransactionsPage services={services} />} />
+        <Route
+          path="movimientos/:transactionId"
+          element={<TransactionsPage services={services} />}
+        />
+        <Route
+          path="movimientos/:transactionId/editar"
+          element={<TransactionsPage services={services} />}
+        />
         <Route path="gastos" element={<ExpensesPage services={services} />} />
         <Route path="control/calidad" element={<DataQualityPage services={services} />} />
         <Route path="control/fuente" element={<DataSourcePage services={services} />} />

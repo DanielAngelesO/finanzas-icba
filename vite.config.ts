@@ -35,7 +35,7 @@ const configuredCommit = [
   process.env.GITHUB_SHA,
 ].find((commit): commit is string => typeof commit === "string" && commit.length > 0);
 const localCommit = readGitOutput(["rev-parse", "--short=7", "HEAD"]);
-const localChanges = readGitOutput(["status", "--porcelain"]);
+const localChanges = readGitOutput(["status", "--porcelain", "--", ".", ":(exclude)workspace"]);
 const buildCommit = configuredCommit
   ? configuredCommit.slice(0, 7)
   : localCommit
