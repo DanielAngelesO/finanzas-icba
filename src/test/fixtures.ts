@@ -4,7 +4,7 @@ import { transactionColumnMapping } from "../config/google-sheets";
 
 export const sheetConfig: GoogleSheetsDataSourceConfig = {
   spreadsheetId: "spreadsheet-test-id",
-  sheetName: "Transacciones",
+  sheetName: "trans_pruebas",
   headerRow: 1,
   firstDataRow: 2,
   range: "A:Z",

@@ -49,6 +49,32 @@ const catalogSheetNames = [
   "Metodos Pago",
 ] as const;
 
+const normalizeSheetName = (value: string): string =>
+  value.trim().normalize("NFC").replace(/\s+/g, " ").toLocaleLowerCase("es-PE");
+
+const findConfiguredSheet = (
+  metadata: SpreadsheetMetadataResponse,
+  configuredName: string,
+): SpreadsheetMetadataResponse["sheets"][number] | null => {
+  const exactMatch = metadata.sheets.find((sheet) => sheet.title === configuredName);
+  return (
+    exactMatch ??
+    metadata.sheets.find(
+      (sheet) => normalizeSheetName(sheet.title) === normalizeSheetName(configuredName),
+    ) ??
+    null
+  );
+};
+
+const missingConfiguredSheetMessage = (
+  config: GoogleSheetsDataSourceConfig,
+  metadata: SpreadsheetMetadataResponse,
+): string => {
+  const availableSheets =
+    metadata.sheetNames.length > 0 ? metadata.sheetNames.join(", ") : "ninguna";
+  return `No se encontró la pestaña configurada "${config.sheetName}". Pestañas disponibles: ${availableSheets}.`;
+};
+
 const maskSpreadsheetId = (id: string): string =>
   id.length <= 8 ? "••••" : `${id.slice(0, 4)}••••${id.slice(-4)}`;
 
@@ -308,12 +334,12 @@ export class GoogleSheetsTransactionRepository implements TransactionRepository 
     const startedAt = performance.now();
     try {
       const metadata = await this.client.getMetadata();
-      const hasSheet = metadata.sheetNames.includes(this.config.sheetName);
+      const hasSheet = findConfiguredSheet(metadata, this.config.sheetName) !== null;
       return {
         status: hasSheet ? "CONNECTED" : "ERROR",
         message: hasSheet
           ? "Conexión con Google Sheets confirmada."
-          : "No existe la pestaña configurada.",
+          : missingConfiguredSheetMessage(this.config, metadata),
         latencyMs: Math.round(performance.now() - startedAt),
         checkedAt: new Date(),
       };
@@ -423,17 +449,15 @@ export class GoogleSheetsTransactionRepository implements TransactionRepository 
         );
         return this.catalogSnapshot;
       }
-      const transactionSheet = metadata.sheets.find(
-        (sheet) => sheet.title === this.config.sheetName,
-      );
-      const values = await this.client.getValues();
+      const transactionSheet = findConfiguredSheet(metadata, this.config.sheetName);
       if (!transactionSheet) {
         this.catalogSnapshot = deriveReadOnlyCatalogs(
           inspection.transactions,
-          "No se encontró la pestaña de transacciones.",
+          missingConfiguredSheetMessage(this.config, metadata),
         );
         return this.catalogSnapshot;
       }
+      const values = await this.client.getValues(transactionSheet.title);
       const structureResult = inspectTransactionSheetStructure(
         values,
         this.config,
@@ -605,7 +629,16 @@ export class GoogleSheetsTransactionRepository implements TransactionRepository 
   private async loadSnapshot(): Promise<TransactionInspectionResult> {
     if (this.snapshot) return this.snapshot;
     const startedAt = performance.now();
-    const values = await this.client.getValues();
+    const metadata = await this.client.getMetadata();
+    const transactionSheet = findConfiguredSheet(metadata, this.config.sheetName);
+    if (!transactionSheet) {
+      throw new GoogleSheetsError(
+        missingConfiguredSheetMessage(this.config, metadata),
+        null,
+        false,
+      );
+    }
+    const values = await this.client.getValues(transactionSheet.title);
     this.snapshot = this.mapper.map(values, Math.round(performance.now() - startedAt));
     return this.snapshot;
   }
@@ -615,14 +648,14 @@ export class GoogleSheetsTransactionRepository implements TransactionRepository 
     if (catalogs.writeCapability.status === "disabled") {
       throw new TransactionWriteUnavailableError(catalogs.writeCapability.reason);
     }
-    const [metadata, values] = await Promise.all([
-      this.client.getMetadata(),
-      this.client.getValues(),
-    ]);
-    const transactionSheet = metadata.sheets.find((sheet) => sheet.title === this.config.sheetName);
+    const metadata = await this.client.getMetadata();
+    const transactionSheet = findConfiguredSheet(metadata, this.config.sheetName);
     if (!transactionSheet) {
-      throw new TransactionWriteUnavailableError("No se encontró la pestaña de transacciones.");
+      throw new TransactionWriteUnavailableError(
+        missingConfiguredSheetMessage(this.config, metadata),
+      );
     }
+    const values = await this.client.getValues(transactionSheet.title);
     const structureResult = inspectTransactionSheetStructure(
       values,
       this.config,
@@ -727,7 +760,16 @@ export class GoogleSheetsTransactionRepository implements TransactionRepository 
   }
 
   private async findFreshById(transactionId: string): Promise<LogicalTransaction | null> {
-    const values = await this.client.getValues();
+    const metadata = await this.client.getMetadata();
+    const transactionSheet = findConfiguredSheet(metadata, this.config.sheetName);
+    if (!transactionSheet) {
+      throw new GoogleSheetsError(
+        missingConfiguredSheetMessage(this.config, metadata),
+        null,
+        false,
+      );
+    }
+    const values = await this.client.getValues(transactionSheet.title);
     const inspection = this.mapper.map(values);
     return (
       groupLogicalTransactions(inspection.transactions).find(

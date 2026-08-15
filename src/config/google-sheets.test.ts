@@ -6,7 +6,7 @@ const configuredEnvironment = {
   DEV: true,
   VITE_GOOGLE_CLIENT_ID: "client-test-id",
   VITE_GOOGLE_SPREADSHEET_ID: "spreadsheet-test-id",
-  VITE_GOOGLE_SHEET_NAME: "Transacciones",
+  VITE_GOOGLE_SHEET_NAME: "trans_pruebas",
   VITE_GOOGLE_DECIMAL_SEPARATOR: ".",
   VITE_ALLOWED_EMAILS: "tesorero@iglesia.org",
 };
@@ -37,6 +37,13 @@ describe("loadAppConfig", () => {
     expect(loadAppConfig(configuredEnvironment)).toMatchObject({ kind: "configured" });
     expect(loadAppConfig({ MODE: "development", DEV: true })).toMatchObject({
       kind: "unconfigured",
+    });
+  });
+
+  it("propaga el nombre configurado de la pestaña de movimientos", () => {
+    expect(loadAppConfig(configuredEnvironment)).toMatchObject({
+      kind: "configured",
+      dataSource: { sheetName: "trans_pruebas" },
     });
   });
 });
