@@ -112,25 +112,66 @@ function TransactionLoadingState() {
 function TransactionSearchControl({
   value,
   onCommit,
+  expanded,
+  focusRequest,
+  onDismiss,
 }: {
   value: string;
   onCommit: (value: string) => void;
+  expanded: boolean;
+  focusRequest: number;
+  onDismiss: () => void;
 }) {
-  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const commitTimeoutRef = useRef<number | null>(null);
+  const onCommitRef = useRef(onCommit);
 
   useEffect(() => {
-    if (draft.trim() === value) return;
-    const timeout = window.setTimeout(() => onCommit(draft.trim()), 150);
-    return () => window.clearTimeout(timeout);
-  }, [draft, onCommit, value]);
+    onCommitRef.current = onCommit;
+  }, [onCommit]);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (input && input.value !== value) input.value = value;
+    if (commitTimeoutRef.current !== null) {
+      window.clearTimeout(commitTimeoutRef.current);
+      commitTimeoutRef.current = null;
+    }
+  }, [value]);
+
+  useEffect(() => {
+    return () => {
+      if (commitTimeoutRef.current !== null) window.clearTimeout(commitTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (focusRequest > 0 && expanded) inputRef.current?.focus();
+  }, [expanded, focusRequest]);
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (commitTimeoutRef.current !== null) window.clearTimeout(commitTimeoutRef.current);
+    const nextValue = event.currentTarget.value;
+    commitTimeoutRef.current = window.setTimeout(() => {
+      commitTimeoutRef.current = null;
+      onCommitRef.current(nextValue.trim());
+    }, 150);
+  };
 
   return (
     <label className="transaction-search-field">
       <span className="sr-only">Buscar movimientos</span>
       <span aria-hidden="true">⌕</span>
       <input
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        id="transaction-search-input"
+        ref={inputRef}
+        defaultValue={value}
+        onChange={handleChange}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || !expanded) return;
+          event.preventDefault();
+          onDismiss();
+        }}
         placeholder="Buscar monto, persona, cuenta…"
       />
     </label>
@@ -148,8 +189,19 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [detailTrigger, setDetailTrigger] = useState<HTMLButtonElement | null>(null);
   const newButtonRef = useRef<HTMLButtonElement>(null);
+  const searchToggleRef = useRef<HTMLButtonElement>(null);
   const urlCriteria = useMemo(() => getUrlCriteria(searchParams), [searchParams]);
   const search = readText(searchParams, "q") ?? "";
+  const [searchManuallyOpen, setSearchManuallyOpen] = useState(false);
+  const [dismissedSearch, setDismissedSearch] = useState<{
+    value: string;
+    locationKey: string;
+  } | null>(null);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const searchOpen =
+    searchManuallyOpen ||
+    (Boolean(search) &&
+      (dismissedSearch?.value !== search || dismissedSearch.locationKey !== location.key));
   const paginationKey = useMemo(
     () => JSON.stringify({ search, ...urlCriteria }),
     [search, urlCriteria],
@@ -278,6 +330,27 @@ export function TransactionsPage({ services }: { services: AppServices }) {
     [updateCriteria],
   );
 
+  const closeSearch = useCallback(() => {
+    if (
+      typeof window.matchMedia === "function" &&
+      !window.matchMedia("(max-width: 47.999rem)").matches
+    ) {
+      return;
+    }
+    setSearchManuallyOpen(false);
+    setDismissedSearch(search ? { value: search, locationKey: location.key } : null);
+    window.setTimeout(() => searchToggleRef.current?.focus(), 0);
+  }, [location.key, search]);
+
+  const toggleSearch = () => {
+    if (searchOpen) {
+      closeSearch();
+      return;
+    }
+    setSearchManuallyOpen(true);
+    setSearchFocusRequest((request) => request + 1);
+  };
+
   const applyFilterDraft = (draft: TransactionFilterDraft) => {
     updateCriteria({
       period: draft.allPeriods ? null : (urlCriteria.period ?? getCurrentLimaPeriod()),
@@ -362,25 +435,21 @@ export function TransactionsPage({ services }: { services: AppServices }) {
 
   return (
     <div className="transaction-page">
-      <header className="transaction-page-header">
-        <div>
-          <h1 className="page-title">Movimientos</h1>
-          <p className="page-subtitle">Registra y consulta las transacciones del período.</p>
-        </div>
-        <button
-          className="button-primary transaction-new-button"
-          type="button"
-          ref={newButtonRef}
-          onClick={() => {
-            setDetailTrigger(null);
-            openRoute("/movimientos/nueva");
-          }}
-          disabled={!writable}
-          title={writeReason ?? undefined}
-        >
-          <span aria-hidden="true">＋</span> Nueva
-        </button>
-      </header>
+      <h1 className="sr-only">Movimientos</h1>
+      <button
+        className="button-primary transaction-new-button"
+        type="button"
+        ref={newButtonRef}
+        onClick={() => {
+          setDetailTrigger(null);
+          openRoute("/movimientos/nueva");
+        }}
+        disabled={!writable}
+        aria-label="Registrar nuevo movimiento"
+        title={writeReason ?? "Registrar nuevo movimiento"}
+      >
+        <span aria-hidden="true">+</span>
+      </button>
 
       {writeReason ? <p className="transaction-write-notice">{writeReason}</p> : null}
 
@@ -389,8 +458,25 @@ export function TransactionsPage({ services }: { services: AppServices }) {
           period={criteria.period}
           onChange={(period) => updateCriteria({ period })}
         />
-        <div className="transaction-search-row">
-          <TransactionSearchControl key={search} value={search} onCommit={commitSearch} />
+        <div className={searchOpen ? "transaction-search-row is-open" : "transaction-search-row"}>
+          <TransactionSearchControl
+            value={search}
+            onCommit={commitSearch}
+            expanded={searchOpen}
+            focusRequest={searchFocusRequest}
+            onDismiss={closeSearch}
+          />
+          <button
+            className="button-secondary transaction-search-toggle"
+            type="button"
+            ref={searchToggleRef}
+            onClick={toggleSearch}
+            aria-controls="transaction-search-input"
+            aria-expanded={searchOpen}
+            aria-label={searchOpen ? "Ocultar búsqueda" : "Buscar movimientos"}
+          >
+            <span aria-hidden="true">{searchOpen ? "×" : "⌕"}</span>
+          </button>
           <button
             className="button-secondary transaction-filter-button"
             type="button"

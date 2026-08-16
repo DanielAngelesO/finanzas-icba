@@ -841,6 +841,63 @@ describe("explorador de movimientos", () => {
     });
   });
 
+  it("conserva el foco del buscador al confirmar el texto", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    const search = await screen.findByRole("textbox", { name: "Buscar movimientos" });
+    await user.type(search, "maria");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("q=maria");
+    });
+    expect(screen.getByRole("textbox", { name: "Buscar movimientos" })).toHaveFocus();
+  });
+
+  it("abre y cierra la búsqueda móvil devolviendo el foco al activador", async () => {
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    const searchToggle = screen.getByRole("button", {
+      name: "Buscar movimientos",
+      hidden: true,
+    });
+    fireEvent.click(searchToggle);
+
+    const search = screen.getByRole("textbox", { name: "Buscar movimientos", hidden: true });
+    expect(searchToggle).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(search).toHaveFocus());
+
+    fireEvent.keyDown(search, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(searchToggle).toHaveAttribute("aria-expanded", "false");
+      expect(searchToggle).toHaveFocus();
+    });
+  });
+
+  it("conserva la búsqueda activa al cerrarla y permite quitarla desde el chip", async () => {
+    renderApp("/movimientos?period=202608&q=maria", createServices(explorerTransactions));
+
+    const searchToggle = screen.getByRole("button", {
+      name: "Ocultar búsqueda",
+      hidden: true,
+    });
+    const search = screen.getByRole("textbox", { name: "Buscar movimientos", hidden: true });
+    expect(searchToggle).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.keyDown(search, { key: "Escape" });
+
+    await waitFor(() => expect(searchToggle).toHaveFocus());
+    expect(screen.getByTestId("location")).toHaveTextContent("q=maria");
+
+    const searchChip = screen.getByRole("button", { name: /Búsqueda: maria/ });
+    fireEvent.click(searchChip);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).not.toHaveTextContent("q=maria");
+    });
+  });
+
   it("valida un rango de fechas invertido antes de aplicar los filtros avanzados", async () => {
     const user = userEvent.setup();
     renderApp("/movimientos", createServices(explorerTransactions));
@@ -879,6 +936,22 @@ describe("explorador de movimientos", () => {
     const offering = screen.getByRole("button", { name: /Ingreso: ofrendas/ });
     expect(offering).toHaveTextContent("Caja");
     expect(offering).toHaveTextContent("ofrendas");
+  });
+
+  it("conserva el estado accesible y marca las confirmadas para ocultarlas en móvil", async () => {
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    await screen.findByRole("button", { name: /Ingreso: Ofrenda de misión/ });
+    const mobileList = document.querySelector<HTMLElement>(".transaction-mobile-list");
+    if (!mobileList) throw new Error("No se encontró el listado móvil.");
+
+    expect(
+      within(mobileList).getByRole("button", { name: /Ingreso: Ofrenda de misión.*Confirmada/ }),
+    ).toBeInTheDocument();
+    expect(mobileList.querySelector(".transaction-mobile-confirmed-status")).toHaveTextContent(
+      "Confirmada",
+    );
+    expect(within(mobileList).getByText("Pendiente")).toBeInTheDocument();
   });
 
   it("abre el detalle completo y devuelve el foco al activador al cerrar con Escape", async () => {
@@ -931,7 +1004,9 @@ describe("explorador de movimientos", () => {
     const user = userEvent.setup();
     renderApp("/movimientos?period=202608", createServices(explorerTransactions));
 
-    const newButton = await screen.findByRole("button", { name: "Nueva" });
+    const newButton = await screen.findByRole("button", {
+      name: "Registrar nuevo movimiento",
+    });
     await waitFor(() => expect(newButton).toBeEnabled());
     await user.click(newButton);
 

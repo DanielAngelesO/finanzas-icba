@@ -12,9 +12,9 @@ test.describe("Movimientos CRUD en modo review", () => {
 
     await page.goto("/movimientos?period=202608&type=EGRESO");
     await expect(page.getByRole("heading", { name: "Movimientos" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Nueva" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Registrar nuevo movimiento" })).toBeEnabled();
 
-    await page.getByRole("button", { name: "Nueva" }).click();
+    await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
     const editor = page.getByRole("dialog", { name: /Nuevo egreso/i });
     await expect(editor).toBeVisible();
     await editor.getByRole("button", { name: /Guardar egreso/i }).click();
@@ -59,6 +59,7 @@ test.describe("Movimientos CRUD en modo review", () => {
     await filters.getByRole("button", { name: "Aplicar filtros" }).click();
     await expect(page).toHaveURL(/status=CONFIRMED/);
 
+    await page.getByRole("button", { name: "Buscar movimientos" }).click();
     await page.getByRole("textbox", { name: "Buscar movimientos" }).fill("aporte");
     await expect(page).toHaveURL(/q=aporte/);
     await page.getByRole("button", { name: /Ingreso: Aporte mensual/i }).click();
@@ -66,6 +67,88 @@ test.describe("Movimientos CRUD en modo review", () => {
     await page.goBack();
     await expect(page).toHaveURL(/status=CONFIRMED/);
     await expect(page).toHaveURL(/q=aporte/);
+  });
+});
+
+test("usa una composición móvil plana y conserva la búsqueda al cerrarla", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/movimientos?period=202608");
+
+  const toolbar = page.locator(".transaction-toolbar");
+  const results = page.locator(".transaction-results");
+  const mobileGeometry = await toolbar.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    return {
+      left: Math.round(bounds.left),
+      right: Math.round(bounds.right),
+      radius: styles.borderTopLeftRadius,
+      shadow: styles.boxShadow,
+    };
+  });
+  expect(mobileGeometry.left).toBeLessThanOrEqual(1);
+  expect(mobileGeometry.right).toBeGreaterThanOrEqual(389);
+  expect(mobileGeometry.radius).toBe("0px");
+  expect(mobileGeometry.shadow).toBe("none");
+
+  await expect(page.locator("#transaction-search-input")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Buscar movimientos" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.locator(".transaction-mobile-confirmed-status").first()).toBeHidden();
+  await expect(toolbar).toHaveScreenshot("movimientos-toolbar-mobile.png", {
+    animations: "disabled",
+  });
+  await expect(results).toHaveScreenshot("movimientos-results-mobile.png", {
+    animations: "disabled",
+  });
+
+  await page.getByRole("button", { name: "Buscar movimientos" }).click();
+  const search = page.getByRole("textbox", { name: "Buscar movimientos" });
+  await expect(search).toBeVisible();
+  await expect(search).toBeFocused();
+  await search.fill("aporte");
+  await expect(page).toHaveURL(/q=aporte/);
+
+  await search.press("Escape");
+  await expect(page.locator("#transaction-search-input")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Buscar movimientos" })).toBeFocused();
+  await expect(page.getByRole("button", { name: /Búsqueda: aporte/ })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Buscar movimientos" })).toBeVisible();
+});
+
+test("restaura los contenedores y la búsqueda visible desde 768 px", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/movimientos?period=202608");
+
+  const toolbar = page.locator(".transaction-toolbar");
+  const results = page.locator(".transaction-results");
+  const tabletGeometry = await toolbar.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    return {
+      left: Math.round(bounds.left),
+      right: Math.round(bounds.right),
+      radius: styles.borderTopLeftRadius,
+    };
+  });
+  expect(tabletGeometry.left).toBeGreaterThan(0);
+  expect(tabletGeometry.right).toBeLessThan(768);
+  expect(tabletGeometry.radius).not.toBe("0px");
+
+  await expect(page.locator("#transaction-search-input")).toBeVisible();
+  await expect(page.locator(".transaction-search-toggle")).toBeHidden();
+  await expect(page.locator(".transaction-mobile-confirmed-status").first()).toBeVisible();
+  await expect(toolbar).toHaveScreenshot("movimientos-toolbar-tablet.png", {
+    animations: "disabled",
+  });
+  await expect(results).toHaveScreenshot("movimientos-results-tablet.png", {
+    animations: "disabled",
   });
 });
 
@@ -79,6 +162,13 @@ test("cumple el escaneo WCAG AA en el listado y el editor", async ({ page }) => 
     .analyze();
   expect(listScan.violations).toEqual([]);
 
+  await page.getByRole("button", { name: "Buscar movimientos" }).click();
+  const expandedListScan = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  expect(expandedListScan.violations).toEqual([]);
+  await page.getByRole("textbox", { name: "Buscar movimientos" }).press("Escape");
+
   await page.getByRole("button", { name: "Abrir menú" }).click();
   await page.getByRole("button", { name: "Usar tema claro" }).click();
   await page.getByRole("button", { name: "Cerrar menú", exact: true }).click();
@@ -88,7 +178,7 @@ test("cumple el escaneo WCAG AA en el listado y el editor", async ({ page }) => 
     .analyze();
   expect(lightListScan.violations).toEqual([]);
 
-  await page.getByRole("button", { name: "Nueva" }).click();
+  await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
   const editor = page.getByRole("dialog", { name: "Nuevo egreso" });
   await expect(editor).toBeVisible();
   await editor.locator(".transaction-dynamic-field-enter").evaluateAll(async (elements) => {
@@ -115,7 +205,7 @@ test("mantiene reflow con tema claro y texto al 200 %", async ({ page }) => {
     .toBe(true);
 });
 
-for (const width of [320, 390, 768, 1024, 1440]) {
+for (const width of [320, 390, 767, 768, 1024, 1440]) {
   test(`no desborda horizontalmente a ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 768 ? 780 : 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -146,7 +236,14 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       `Elementos fuera del viewport: ${JSON.stringify(layout.offenders)}`,
     ).toBeLessThanOrEqual(layout.viewportWidth + 1);
 
-    await page.getByRole("button", { name: "Nueva" }).click();
+    if (width === 320) {
+      const quickFiltersScroll = await page
+        .locator(".transaction-quick-filters")
+        .evaluate((element) => element.scrollWidth > element.clientWidth);
+      expect(quickFiltersScroll).toBe(true);
+    }
+
+    await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
     const editor = page.getByRole("dialog", { name: /Nuevo egreso/i });
     await expect(editor).toBeVisible();
     await expect

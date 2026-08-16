@@ -96,16 +96,18 @@ export function TransactionList({
                           <span className="transaction-row-concept">{concept}</span>
                           <Amount transaction={transaction} />
                         </span>
-                        <span className="transaction-row-meta">
-                          <span>{getTransactionAccountsLabel(transaction)}</span>
-                          {transaction.kind === "single" ? (
-                            <span> · {transaction.category}</span>
-                          ) : null}
-                        </span>
-                        <span
-                          className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}`}
-                        >
-                          {getTransactionStatusLabel(transaction.status)}
+                        <span className="transaction-row-details">
+                          <span className="transaction-row-meta">
+                            <span>{getTransactionAccountsLabel(transaction)}</span>
+                            {transaction.kind === "single" ? (
+                              <span> · {transaction.category}</span>
+                            ) : null}
+                          </span>
+                          <span
+                            className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}${transaction.status === "CONFIRMED" ? " transaction-mobile-confirmed-status" : ""}`}
+                          >
+                            {getTransactionStatusLabel(transaction.status)}
+                          </span>
                         </span>
                       </span>
                     </button>
