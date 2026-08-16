@@ -71,8 +71,10 @@ export function CatalogPicker({
   return (
     <div className="transaction-catalog-field">
       <label className="field-label" id={`${id}-label`}>
-        {label}
-        {required ? <span aria-hidden="true"> *</span> : null}
+        <span className="transaction-field-label-text">
+          {label}
+          {required ? <span aria-hidden="true">*</span> : null}
+        </span>
       </label>
       <button
         className="field transaction-catalog-trigger"

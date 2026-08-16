@@ -48,20 +48,20 @@ export function TransactionTypeControl({
 export function CurrencyInput({
   value,
   onChange,
-  onBlur,
   error,
   inputRef,
 }: {
   value: string;
   onChange: (value: string) => void;
-  onBlur: () => void;
   error?: string | undefined;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const id = useId();
   return (
     <label className="field-label" htmlFor={`${id}-amount`}>
-      Monto <span aria-hidden="true">*</span>
+      <span className="transaction-field-label-text">
+        Monto <span aria-hidden="true">*</span>
+      </span>
       <span className="transaction-currency-field">
         <span aria-hidden="true">S/</span>
         <input
@@ -72,7 +72,6 @@ export function CurrencyInput({
           autoComplete="off"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          onBlur={onBlur}
           placeholder="0.00"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}

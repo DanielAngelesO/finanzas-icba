@@ -177,7 +177,7 @@ export function TransactionDetailSheet({
           onClose();
         }}
       >
-        <div className="transaction-detail-content">
+        <div className="transaction-detail-content transaction-movements-detail-content">
           <header className="transaction-sheet-header">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
@@ -214,40 +214,6 @@ export function TransactionDetailSheet({
                 {getTransactionAccountsLabel(transaction)}
               </p>
             </section>
-
-            <div className="transaction-detail-actions">
-              {transaction.status !== "VOIDED" ? (
-                <button
-                  className="button-primary"
-                  type="button"
-                  onClick={onEdit}
-                  disabled={!writable}
-                  title={writeReason ?? undefined}
-                >
-                  Editar
-                </button>
-              ) : null}
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={onDuplicate}
-                disabled={!writable}
-                title={writeReason ?? undefined}
-              >
-                Duplicar
-              </button>
-              {transaction.status !== "VOIDED" ? (
-                <button
-                  className="button-secondary"
-                  type="button"
-                  onClick={() => setVoidOpen(true)}
-                  disabled={!writable}
-                  title={writeReason ?? undefined}
-                >
-                  Anular
-                </button>
-              ) : null}
-            </div>
 
             {transaction.kind === "single" ? (
               <section aria-labelledby="detail-classification-title">
@@ -361,6 +327,40 @@ export function TransactionDetailSheet({
                 ) : null}
               </dl>
             </details>
+
+            <div className="transaction-detail-actions" aria-label="Acciones de la transacción">
+              {transaction.status !== "VOIDED" ? (
+                <button
+                  className="button-primary"
+                  type="button"
+                  onClick={onEdit}
+                  disabled={!writable}
+                  title={writeReason ?? undefined}
+                >
+                  Editar
+                </button>
+              ) : null}
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={onDuplicate}
+                disabled={!writable}
+                title={writeReason ?? undefined}
+              >
+                Duplicar
+              </button>
+              {transaction.status !== "VOIDED" ? (
+                <button
+                  className="button-secondary"
+                  type="button"
+                  onClick={() => setVoidOpen(true)}
+                  disabled={!writable}
+                  title={writeReason ?? undefined}
+                >
+                  Anular
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       </dialog>

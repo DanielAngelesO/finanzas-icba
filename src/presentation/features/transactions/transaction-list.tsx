@@ -59,129 +59,163 @@ function Amount({ transaction }: { transaction: LogicalTransaction }) {
 export function TransactionList({
   transactions,
   onOpen,
+  variant = "default",
 }: {
   transactions: LogicalTransaction[];
   onOpen: (transaction: LogicalTransaction, trigger: HTMLButtonElement) => void;
+  variant?: "default" | "search";
 }) {
   const groups = groupByDay(transactions);
+  const renderMobileRow = (transaction: LogicalTransaction, includeDate: boolean) => {
+    const concept = getTransactionConcept(transaction);
+    const dateLabel = includeDate ? formatCompactDate(transaction.date) : null;
+    return (
+      <button
+        className="transaction-mobile-row"
+        type="button"
+        onClick={(event) => onOpen(transaction, event.currentTarget)}
+        aria-label={`${getTransactionTypeLabel(transaction.type)}: ${concept}, ${formatMoney(transaction.amount)}${dateLabel ? `, ${dateLabel}` : ""}, ${getTransactionStatusLabel(transaction.status)}`}
+      >
+        <span
+          className={`transaction-row-icon ${getTransactionTypeClass(transaction.type)}`}
+          aria-hidden="true"
+        >
+          {getTransactionTypeIcon(transaction.type)}
+        </span>
+        <span className="transaction-row-main">
+          <span className="transaction-row-topline">
+            <span className="transaction-row-concept">{concept}</span>
+            <Amount transaction={transaction} />
+          </span>
+          <span className="transaction-row-details">
+            <span className="transaction-row-meta">
+              {dateLabel ? (
+                <>
+                  <span>{dateLabel}</span>
+                  <span aria-hidden="true"> · </span>
+                </>
+              ) : null}
+              <span>{getTransactionAccountsLabel(transaction)}</span>
+              {transaction.kind === "single" ? (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <span>{transaction.category}</span>
+                </>
+              ) : null}
+            </span>
+            <span
+              className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}${transaction.status === "CONFIRMED" ? " transaction-mobile-confirmed-status" : ""}`}
+            >
+              {getTransactionStatusLabel(transaction.status)}
+            </span>
+          </span>
+        </span>
+      </button>
+    );
+  };
+
   return (
     <>
-      <div className="transaction-mobile-list lg:hidden">
-        {groups.map((group) => (
-          <section key={group.key} aria-labelledby={`transactions-day-${group.key}`}>
-            <h3 className="transaction-day-heading" id={`transactions-day-${group.key}`}>
-              {formatDayHeading(group.date)}
-            </h3>
-            <ul
-              aria-label={`Movimientos del ${formatDayHeading(group.date).toLocaleLowerCase("es-PE")}`}
-            >
-              {group.transactions.map((transaction) => {
-                const concept = getTransactionConcept(transaction);
-                return (
-                  <li key={transaction.transactionId}>
-                    <button
-                      className="transaction-mobile-row"
-                      type="button"
-                      onClick={(event) => onOpen(transaction, event.currentTarget)}
-                      aria-label={`${getTransactionTypeLabel(transaction.type)}: ${concept}, ${formatMoney(transaction.amount)}, ${getTransactionStatusLabel(transaction.status)}`}
-                    >
-                      <span
-                        className={`transaction-row-icon ${getTransactionTypeClass(transaction.type)}`}
-                        aria-hidden="true"
-                      >
-                        {getTransactionTypeIcon(transaction.type)}
-                      </span>
-                      <span className="transaction-row-main">
-                        <span className="transaction-row-topline">
-                          <span className="transaction-row-concept">{concept}</span>
-                          <Amount transaction={transaction} />
-                        </span>
-                        <span className="transaction-row-details">
-                          <span className="transaction-row-meta">
-                            <span>{getTransactionAccountsLabel(transaction)}</span>
-                            {transaction.kind === "single" ? (
-                              <span> · {transaction.category}</span>
-                            ) : null}
-                          </span>
-                          <span
-                            className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}${transaction.status === "CONFIRMED" ? " transaction-mobile-confirmed-status" : ""}`}
-                          >
-                            {getTransactionStatusLabel(transaction.status)}
-                          </span>
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
+      <div
+        className={
+          variant === "search"
+            ? "transaction-search-result-list lg:hidden"
+            : "transaction-mobile-list lg:hidden"
+        }
+      >
+        {variant === "search" ? (
+          <ul aria-label="Resultados de búsqueda">
+            {transactions.map((transaction) => (
+              <li key={transaction.transactionId}>{renderMobileRow(transaction, true)}</li>
+            ))}
+          </ul>
+        ) : (
+          groups.map((group) => (
+            <section key={group.key} aria-labelledby={`transactions-day-${group.key}`}>
+              <h3 className="transaction-day-heading" id={`transactions-day-${group.key}`}>
+                {formatDayHeading(group.date)}
+              </h3>
+              <ul
+                aria-label={`Movimientos del ${formatDayHeading(group.date).toLocaleLowerCase("es-PE")}`}
+              >
+                {group.transactions.map((transaction) => (
+                  <li key={transaction.transactionId}>{renderMobileRow(transaction, false)}</li>
+                ))}
+              </ul>
+            </section>
+          ))
+        )}
       </div>
 
-      <div className="transaction-table-wrapper hidden lg:block">
-        <table className="data-table transaction-table" aria-label="Movimientos encontrados">
-          <thead>
-            <tr>
-              <th scope="col">Fecha</th>
-              <th scope="col">Movimiento</th>
-              <th scope="col">Tipo</th>
-              <th scope="col">Cuenta</th>
-              <th scope="col">Estado</th>
-              <th scope="col" className="text-right">
-                Monto
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((transaction) => {
-              const concept = getTransactionConcept(transaction);
-              return (
-                <tr
-                  className={transaction.status === "VOIDED" ? "transaction-row-voided" : undefined}
-                  key={transaction.transactionId}
-                >
-                  <td className="whitespace-nowrap text-slate-300">
-                    {formatCompactDate(transaction.date)}
-                  </td>
-                  <td className="transaction-table-concept">
-                    <button
-                      className="transaction-table-row-action"
-                      type="button"
-                      onClick={(event) => onOpen(transaction, event.currentTarget)}
-                    >
-                      <span className="truncate font-medium text-slate-100">{concept}</span>
-                      <span className="sr-only">. Abrir detalle</span>
-                    </button>
-                    {transaction.kind === "single" ? (
-                      <p className="mt-1 truncate text-xs text-slate-500">{transaction.category}</p>
-                    ) : null}
-                  </td>
-                  <td>
-                    <TypeBadge transaction={transaction} />
-                  </td>
-                  <td
-                    className="max-w-52 truncate text-slate-300"
-                    title={getTransactionAccountsLabel(transaction)}
+      {variant === "default" ? (
+        <div className="transaction-table-wrapper hidden lg:block">
+          <table className="data-table transaction-table" aria-label="Movimientos encontrados">
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Movimiento</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Cuenta</th>
+                <th scope="col">Estado</th>
+                <th scope="col" className="text-right">
+                  Monto
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((transaction) => {
+                const concept = getTransactionConcept(transaction);
+                return (
+                  <tr
+                    className={
+                      transaction.status === "VOIDED" ? "transaction-row-voided" : undefined
+                    }
+                    key={transaction.transactionId}
                   >
-                    {getTransactionAccountsLabel(transaction)}
-                  </td>
-                  <td>
-                    <span
-                      className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}`}
+                    <td className="whitespace-nowrap text-slate-300">
+                      {formatCompactDate(transaction.date)}
+                    </td>
+                    <td className="transaction-table-concept">
+                      <button
+                        className="transaction-table-row-action"
+                        type="button"
+                        onClick={(event) => onOpen(transaction, event.currentTarget)}
+                      >
+                        <span className="truncate font-medium text-slate-100">{concept}</span>
+                        <span className="sr-only">. Abrir detalle</span>
+                      </button>
+                      {transaction.kind === "single" ? (
+                        <p className="mt-1 truncate text-xs text-slate-500">
+                          {transaction.category}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td>
+                      <TypeBadge transaction={transaction} />
+                    </td>
+                    <td
+                      className="max-w-52 truncate text-slate-300"
+                      title={getTransactionAccountsLabel(transaction)}
                     >
-                      {getTransactionStatusLabel(transaction.status)}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap text-right">
-                    <Amount transaction={transaction} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                      {getTransactionAccountsLabel(transaction)}
+                    </td>
+                    <td>
+                      <span
+                        className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}`}
+                      >
+                        {getTransactionStatusLabel(transaction.status)}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap text-right">
+                      <Amount transaction={transaction} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </>
   );
 }

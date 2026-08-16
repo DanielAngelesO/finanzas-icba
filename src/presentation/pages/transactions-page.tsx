@@ -9,7 +9,6 @@ import {
 } from "../../application/use-cases/explore-transactions";
 import type { AppServices } from "../../composition/services";
 import {
-  getTransactionStatusLabel,
   type LogicalTransaction,
   type TransactionActor,
   type TransactionStatus,
@@ -25,6 +24,10 @@ import {
 import { TransactionList } from "../features/transactions/transaction-list";
 import { PeriodNavigator } from "../features/transactions/period-navigator";
 import {
+  TransactionSearchInline,
+  TransactionSearchSheet,
+} from "../features/transactions/transaction-search-sheet";
+import {
   getCurrentLimaPeriod,
   getTransactionTypeLabel,
 } from "../features/transactions/transaction-ui";
@@ -36,13 +39,6 @@ interface ToastState {
   message: string;
   similarTransactionId: string | null;
 }
-
-const quickTypeOptions: Array<{ value: TransactionType | null; label: string }> = [
-  { value: null, label: "Todos" },
-  { value: "INGRESO", label: "Ingresos" },
-  { value: "EGRESO", label: "Egresos" },
-  { value: "TRANSFERENCIA", label: "Transferencias" },
-];
 
 const isTransactionType = (value: string | null): value is TransactionType =>
   value === "INGRESO" || value === "EGRESO" || value === "TRANSFERENCIA";
@@ -98,6 +94,11 @@ const countAdvancedFilters = (criteria: TransactionExplorerCriteria): number =>
     Boolean,
   ).length + (criteria.period === null ? 1 : 0);
 
+const getInitialMobileSearchState = (): boolean =>
+  typeof window === "undefined" ||
+  typeof window.matchMedia !== "function" ||
+  window.matchMedia("(max-width: 47.999rem)").matches;
+
 function TransactionLoadingState() {
   return (
     <section className="transaction-loading-list" aria-busy="true" aria-live="polite">
@@ -106,75 +107,6 @@ function TransactionLoadingState() {
       <div className="shimmer h-20 w-full" aria-hidden="true" />
       <span className="sr-only">Cargando movimientos.</span>
     </section>
-  );
-}
-
-function TransactionSearchControl({
-  value,
-  onCommit,
-  expanded,
-  focusRequest,
-  onDismiss,
-}: {
-  value: string;
-  onCommit: (value: string) => void;
-  expanded: boolean;
-  focusRequest: number;
-  onDismiss: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const commitTimeoutRef = useRef<number | null>(null);
-  const onCommitRef = useRef(onCommit);
-
-  useEffect(() => {
-    onCommitRef.current = onCommit;
-  }, [onCommit]);
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (input && input.value !== value) input.value = value;
-    if (commitTimeoutRef.current !== null) {
-      window.clearTimeout(commitTimeoutRef.current);
-      commitTimeoutRef.current = null;
-    }
-  }, [value]);
-
-  useEffect(() => {
-    return () => {
-      if (commitTimeoutRef.current !== null) window.clearTimeout(commitTimeoutRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (focusRequest > 0 && expanded) inputRef.current?.focus();
-  }, [expanded, focusRequest]);
-
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (commitTimeoutRef.current !== null) window.clearTimeout(commitTimeoutRef.current);
-    const nextValue = event.currentTarget.value;
-    commitTimeoutRef.current = window.setTimeout(() => {
-      commitTimeoutRef.current = null;
-      onCommitRef.current(nextValue.trim());
-    }, 150);
-  };
-
-  return (
-    <label className="transaction-search-field">
-      <span className="sr-only">Buscar movimientos</span>
-      <span aria-hidden="true">⌕</span>
-      <input
-        id="transaction-search-input"
-        ref={inputRef}
-        defaultValue={value}
-        onChange={handleChange}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || !expanded) return;
-          event.preventDefault();
-          onDismiss();
-        }}
-        placeholder="Buscar monto, persona, cuenta…"
-      />
-    </label>
   );
 }
 
@@ -190,18 +122,14 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   const [detailTrigger, setDetailTrigger] = useState<HTMLButtonElement | null>(null);
   const newButtonRef = useRef<HTMLButtonElement>(null);
   const searchToggleRef = useRef<HTMLButtonElement>(null);
+  const searchEntryPeriodRef = useRef<string | null | undefined>(undefined);
+  const restoreSearchOnReturnRef = useRef(false);
+  const reopenSearchAfterFiltersRef = useRef(false);
+  const [isMobileSearchViewport, setIsMobileSearchViewport] = useState(getInitialMobileSearchState);
   const urlCriteria = useMemo(() => getUrlCriteria(searchParams), [searchParams]);
-  const search = readText(searchParams, "q") ?? "";
+  const search = searchParams.get("q") ?? "";
   const [searchManuallyOpen, setSearchManuallyOpen] = useState(false);
-  const [dismissedSearch, setDismissedSearch] = useState<{
-    value: string;
-    locationKey: string;
-  } | null>(null);
-  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
-  const searchOpen =
-    searchManuallyOpen ||
-    (Boolean(search) &&
-      (dismissedSearch?.value !== search || dismissedSearch.locationKey !== location.key));
+  const searchOpen = searchManuallyOpen || Boolean(search.trim());
   const paginationKey = useMemo(
     () => JSON.stringify({ search, ...urlCriteria }),
     [search, urlCriteria],
@@ -270,6 +198,13 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   const isNewRoute = location.pathname === "/movimientos/nueva";
   const isEditRoute = location.pathname.endsWith("/editar");
   const isDetailRoute = Boolean(transactionId) && !isEditRoute;
+  const mobileSearchOpen =
+    isMobileSearchViewport &&
+    searchOpen &&
+    !filtersOpen &&
+    !isDetailRoute &&
+    !isNewRoute &&
+    !isEditRoute;
   const newType = searchParams.get("newType");
   const initialEditorType: TransactionType = isTransactionType(newType)
     ? newType
@@ -290,6 +225,21 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia("(max-width: 47.999rem)");
+    const updateMobileState = () => setIsMobileSearchViewport(mediaQuery.matches);
+    updateMobileState();
+    mediaQuery.addEventListener("change", updateMobileState);
+    return () => mediaQuery.removeEventListener("change", updateMobileState);
+  }, []);
+
+  useEffect(() => {
+    if (mobileSearchOpen && searchEntryPeriodRef.current === undefined) {
+      searchEntryPeriodRef.current = urlCriteria.period;
+    }
+  }, [mobileSearchOpen, urlCriteria.period]);
+
+  useEffect(() => {
     if (isEditRoute && selectedTransaction?.status === "VOIDED") {
       navigate(`/movimientos/${selectedTransaction.transactionId}${location.search}`, {
         replace: true,
@@ -302,6 +252,13 @@ export function TransactionsPage({ services }: { services: AppServices }) {
       navigate(listHref, { replace: true });
     }
   }, [catalogsQuery.data, isEditRoute, isNewRoute, listHref, navigate, writable]);
+
+  useEffect(() => {
+    const isListRoute = !isDetailRoute && !isNewRoute && !isEditRoute;
+    if (!isListRoute || !restoreSearchOnReturnRef.current) return;
+    restoreSearchOnReturnRef.current = false;
+    setSearchManuallyOpen(true);
+  }, [isDetailRoute, isEditRoute, isNewRoute, location.key]);
 
   const updateCriteria = useCallback(
     (patch: Partial<UrlCriteria>, searchPatch?: string | null) => {
@@ -326,29 +283,63 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   );
 
   const commitSearch = useCallback(
-    (value: string) => updateCriteria({}, value || null),
+    (value: string) => updateCriteria({}, value.trim() ? value : null),
     [updateCriteria],
   );
 
-  const closeSearch = useCallback(() => {
-    if (
-      typeof window.matchMedia === "function" &&
-      !window.matchMedia("(max-width: 47.999rem)").matches
-    ) {
-      return;
-    }
+  const clearSearchCriteria = useCallback(
+    (period: string | null) =>
+      updateCriteria(
+        {
+          period,
+          type: null,
+          dateFrom: null,
+          dateTo: null,
+          account: null,
+          category: null,
+          status: null,
+          sort: "date-desc",
+        },
+        null,
+      ),
+    [updateCriteria],
+  );
+
+  const cancelSearch = useCallback(() => {
+    const period =
+      searchEntryPeriodRef.current !== undefined
+        ? searchEntryPeriodRef.current
+        : urlCriteria.period;
+    clearSearchCriteria(period);
     setSearchManuallyOpen(false);
-    setDismissedSearch(search ? { value: search, locationKey: location.key } : null);
+    searchEntryPeriodRef.current = undefined;
+    reopenSearchAfterFiltersRef.current = false;
     window.setTimeout(() => searchToggleRef.current?.focus(), 0);
-  }, [location.key, search]);
+  }, [clearSearchCriteria, setSearchManuallyOpen, urlCriteria.period]);
+
+  const openSearch = useCallback(() => {
+    searchEntryPeriodRef.current = urlCriteria.period;
+    setSearchManuallyOpen(true);
+  }, [setSearchManuallyOpen, urlCriteria.period]);
 
   const toggleSearch = () => {
-    if (searchOpen) {
-      closeSearch();
-      return;
-    }
+    if (mobileSearchOpen) cancelSearch();
+    else openSearch();
+  };
+
+  const restoreSearchAfterFilters = () => {
+    setFiltersOpen(false);
+    if (!reopenSearchAfterFiltersRef.current) return;
+    reopenSearchAfterFiltersRef.current = false;
     setSearchManuallyOpen(true);
-    setSearchFocusRequest((request) => request + 1);
+  };
+
+  const openAdvancedFilters = () => {
+    if (mobileSearchOpen) {
+      reopenSearchAfterFiltersRef.current = true;
+      setSearchManuallyOpen(false);
+    }
+    setFiltersOpen(true);
   };
 
   const applyFilterDraft = (draft: TransactionFilterDraft) => {
@@ -361,30 +352,43 @@ export function TransactionsPage({ services }: { services: AppServices }) {
       status: draft.status || null,
       sort: draft.sort,
     });
-    setFiltersOpen(false);
+    restoreSearchAfterFilters();
   };
 
   const clearFilters = () => {
-    updateCriteria(
-      {
-        type: null,
-        dateFrom: null,
-        dateTo: null,
-        account: null,
-        category: null,
-        status: null,
-        sort: "date-desc",
-      },
-      null,
-    );
+    clearSearchCriteria(urlCriteria.period);
   };
 
   const openRoute = (path: string, replace = false) => {
     navigate(`${path}${location.search}`, { replace, state: { fromMovements: true } });
   };
+
+  const openTransactionDetail = (
+    transaction: LogicalTransaction,
+    trigger: HTMLButtonElement,
+    fromSearch: boolean,
+  ) => {
+    if (fromSearch) {
+      restoreSearchOnReturnRef.current = true;
+      setDetailTrigger(null);
+      setSearchManuallyOpen(false);
+    } else {
+      setDetailTrigger(trigger);
+    }
+    navigate(`/movimientos/${transaction.transactionId}${location.search}`, {
+      state: { fromMovements: true, fromSearch },
+    });
+  };
+
   const closeSheet = () => {
-    const focusTarget = detailTrigger ?? newButtonRef.current;
     const state = location.state;
+    const fromSearch =
+      restoreSearchOnReturnRef.current ||
+      (typeof state === "object" &&
+        state !== null &&
+        "fromSearch" in state &&
+        state.fromSearch === true);
+    const focusTarget = fromSearch ? null : (detailTrigger ?? newButtonRef.current);
     if (
       typeof state === "object" &&
       state !== null &&
@@ -393,7 +397,12 @@ export function TransactionsPage({ services }: { services: AppServices }) {
     ) {
       navigate(-1);
     } else navigate(listHref, { replace: true });
-    window.setTimeout(() => focusTarget?.focus(), 0);
+    if (fromSearch) {
+      restoreSearchOnReturnRef.current = true;
+      setSearchManuallyOpen(true);
+    } else {
+      window.setTimeout(() => focusTarget?.focus(), 0);
+    }
   };
 
   const saveDraft = async (draft: Parameters<AppServices["transactions"]["create"]>[0]) => {
@@ -458,87 +467,53 @@ export function TransactionsPage({ services }: { services: AppServices }) {
           period={criteria.period}
           onChange={(period) => updateCriteria({ period })}
         />
-        <div className={searchOpen ? "transaction-search-row is-open" : "transaction-search-row"}>
-          <TransactionSearchControl
-            value={search}
-            onCommit={commitSearch}
-            expanded={searchOpen}
-            focusRequest={searchFocusRequest}
-            onDismiss={closeSearch}
-          />
+        {isMobileSearchViewport ? (
           <button
             className="button-secondary transaction-search-toggle"
             type="button"
             ref={searchToggleRef}
             onClick={toggleSearch}
-            aria-controls="transaction-search-input"
-            aria-expanded={searchOpen}
-            aria-label={searchOpen ? "Ocultar búsqueda" : "Buscar movimientos"}
+            aria-controls="transaction-search-dialog"
+            aria-expanded={mobileSearchOpen}
+            aria-label="Buscar movimientos"
           >
-            <span aria-hidden="true">{searchOpen ? "×" : "⌕"}</span>
+            <span aria-hidden="true">⌕</span>
           </button>
-          <button
-            className="button-secondary transaction-filter-button"
-            type="button"
-            onClick={() => setFiltersOpen(true)}
-            aria-label={`Abrir filtros${activeFilterCount ? `, ${activeFilterCount} aplicados` : ""}`}
-          >
-            <span aria-hidden="true">⚙</span>
-            {activeFilterCount > 0 ? (
-              <span className="transaction-filter-count">{activeFilterCount}</span>
-            ) : null}
-          </button>
-        </div>
-        <fieldset className="transaction-quick-filters">
-          <legend className="sr-only">Filtrar por tipo</legend>
-          {quickTypeOptions.map((option) => (
-            <button
-              key={option.label}
-              type="button"
-              aria-pressed={criteria.type === option.value}
-              onClick={() => updateCriteria({ type: option.value })}
-            >
-              {option.label}
-            </button>
-          ))}
-        </fieldset>
-        {criteria.search || criteria.type || activeFilterCount > 0 ? (
-          <div className="transaction-active-filters" aria-label="Filtros aplicados">
-            {criteria.search ? (
-              <button type="button" onClick={() => commitSearch("")}>
-                Búsqueda: {criteria.search} <span aria-hidden="true">×</span>
-              </button>
-            ) : null}
-            {criteria.account ? (
-              <button type="button" onClick={() => updateCriteria({ account: null })}>
-                Cuenta: {criteria.account} <span aria-hidden="true">×</span>
-              </button>
-            ) : null}
-            {criteria.category ? (
-              <button type="button" onClick={() => updateCriteria({ category: null })}>
-                Categoría: {criteria.category} <span aria-hidden="true">×</span>
-              </button>
-            ) : null}
-            {criteria.status ? (
-              <button type="button" onClick={() => updateCriteria({ status: null })}>
-                Estado: {getTransactionStatusLabel(criteria.status)}{" "}
-                <span aria-hidden="true">×</span>
-              </button>
-            ) : null}
-            {criteria.period === null ? (
-              <button
-                type="button"
-                onClick={() => updateCriteria({ period: getCurrentLimaPeriod() })}
-              >
-                Todos los períodos <span aria-hidden="true">×</span>
-              </button>
-            ) : null}
-            <button className="transaction-clear-filters" type="button" onClick={clearFilters}>
-              Limpiar filtros
-            </button>
-          </div>
-        ) : null}
+        ) : (
+          <TransactionSearchInline
+            value={search}
+            type={criteria.type}
+            total={explorer?.total ?? 0}
+            advancedFilterCount={activeFilterCount}
+            onChange={commitSearch}
+            onTypeChange={(type) => updateCriteria({ type })}
+            onOpenAdvanced={openAdvancedFilters}
+          />
+        )}
       </section>
+
+      {isMobileSearchViewport && explorer ? (
+        <TransactionSearchSheet
+          open={mobileSearchOpen}
+          value={search}
+          type={criteria.type}
+          total={explorer.total}
+          transactions={explorer.transactions}
+          advancedFilterCount={activeFilterCount}
+          hasMore={explorer.transactions.length < explorer.total}
+          onChange={commitSearch}
+          onTypeChange={(type) => updateCriteria({ type })}
+          onOpenAdvanced={openAdvancedFilters}
+          onCancel={cancelSearch}
+          onOpenResult={(transaction, trigger) => openTransactionDetail(transaction, trigger, true)}
+          onLoadMore={() =>
+            setPagination((current) => ({
+              key: paginationKey,
+              count: (current.key === paginationKey ? current.count : 30) + 30,
+            }))
+          }
+        />
+      ) : null}
 
       {toast ? (
         <div className="transaction-toast" role="status" aria-live="polite">
@@ -630,10 +605,9 @@ export function TransactionsPage({ services }: { services: AppServices }) {
             <>
               <TransactionList
                 transactions={explorer.transactions}
-                onOpen={(transaction: LogicalTransaction, trigger: HTMLButtonElement) => {
-                  setDetailTrigger(trigger);
-                  openRoute(`/movimientos/${transaction.transactionId}`);
-                }}
+                onOpen={(transaction: LogicalTransaction, trigger: HTMLButtonElement) =>
+                  openTransactionDetail(transaction, trigger, false)
+                }
               />
               {explorer.transactions.length < explorer.total ? (
                 <div className="transaction-load-more">
@@ -664,7 +638,7 @@ export function TransactionsPage({ services }: { services: AppServices }) {
           open={filtersOpen}
           criteria={criteria}
           facets={explorer.facets}
-          onClose={() => setFiltersOpen(false)}
+          onClose={restoreSearchAfterFilters}
           onApply={applyFilterDraft}
         />
       ) : null}

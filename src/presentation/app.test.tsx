@@ -367,6 +367,7 @@ describe("navegación principal", () => {
   });
 
   it("permite filtrar y distinguir transferencias en Movimientos", async () => {
+    const user = userEvent.setup();
     const services = createServices([
       makeTransaction({
         id: "TRANSFER-OUT",
@@ -396,12 +397,16 @@ describe("navegación principal", () => {
     renderApp("/movimientos?type=TRANSFERENCIA", services);
 
     expect(await screen.findByRole("status")).toHaveTextContent("1 movimiento");
-    expect(screen.getByRole("button", { name: "Transferencias" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "Buscar movimientos" }));
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    expect(within(searchDialog).getByRole("button", { name: "Transf." })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(
-      screen.getAllByRole("button", { name: /Transferencia: Traslado a caja chica/ }),
+      within(searchDialog).getAllByRole("button", {
+        name: /Transferencia: Traslado a caja chica/,
+      }),
     ).not.toHaveLength(0);
   });
 
@@ -833,11 +838,14 @@ describe("explorador de movimientos", () => {
     expect(period).toHaveValue("2026-08");
     expect(await screen.findByRole("status")).toHaveTextContent("2 movimientos en agosto de 2026");
 
-    await user.clear(screen.getByRole("textbox", { name: "Buscar movimientos" }));
-    await user.type(screen.getByRole("textbox", { name: "Buscar movimientos" }), "maria alvarez");
+    await user.click(screen.getByRole("button", { name: "Buscar movimientos" }));
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    const search = within(searchDialog).getByRole("textbox", { name: "Buscar movimientos" });
+    await user.type(search, "maria alvarez");
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("1 movimiento en agosto de 2026");
+      expect(within(searchDialog).getByRole("status")).toHaveTextContent("1 resultado");
+      expect(screen.getByTestId("location")).toHaveTextContent("q=maria+alvarez");
     });
   });
 
@@ -845,65 +853,93 @@ describe("explorador de movimientos", () => {
     const user = userEvent.setup();
     renderApp("/movimientos?period=202608", createServices(explorerTransactions));
 
-    const search = await screen.findByRole("textbox", { name: "Buscar movimientos" });
+    await user.click(screen.getByRole("button", { name: "Buscar movimientos" }));
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    const search = within(searchDialog).getByRole("textbox", { name: "Buscar movimientos" });
     await user.type(search, "maria");
 
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("q=maria");
     });
-    expect(screen.getByRole("textbox", { name: "Buscar movimientos" })).toHaveFocus();
+    expect(search).toHaveFocus();
+  });
+
+  it("actualiza el contador por tecla y combina texto y tipo con AND", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos?period=all", createServices(explorerTransactions));
+
+    await user.click(screen.getByRole("button", { name: "Buscar movimientos" }));
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    const search = within(searchDialog).getByRole("textbox", { name: "Buscar movimientos" });
+    fireEvent.change(search, { target: { value: "aporte" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("q=aporte");
+      expect(within(searchDialog).getByRole("status")).toHaveTextContent("2 resultados");
+    });
+
+    await user.click(within(searchDialog).getByRole("button", { name: "Egresos" }));
+    await waitFor(() =>
+      expect(within(searchDialog).getByRole("status")).toHaveTextContent("0 resultados"),
+    );
+    await user.click(within(searchDialog).getByRole("button", { name: "Ingresos" }));
+    await waitFor(() =>
+      expect(within(searchDialog).getByRole("status")).toHaveTextContent("2 resultados"),
+    );
   });
 
   it("abre y cierra la búsqueda móvil devolviendo el foco al activador", async () => {
+    const user = userEvent.setup();
     renderApp("/movimientos?period=202608", createServices(explorerTransactions));
 
-    const searchToggle = screen.getByRole("button", {
-      name: "Buscar movimientos",
-      hidden: true,
-    });
-    fireEvent.click(searchToggle);
+    const searchToggle = screen.getByRole("button", { name: "Buscar movimientos" });
+    await user.click(searchToggle);
 
-    const search = screen.getByRole("textbox", { name: "Buscar movimientos", hidden: true });
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    const search = within(searchDialog).getByRole("textbox", { name: "Buscar movimientos" });
     expect(searchToggle).toHaveAttribute("aria-expanded", "true");
     await waitFor(() => expect(search).toHaveFocus());
 
-    fireEvent.keyDown(search, { key: "Escape" });
+    await user.keyboard("{Escape}");
 
     await waitFor(() => {
       expect(searchToggle).toHaveAttribute("aria-expanded", "false");
       expect(searchToggle).toHaveFocus();
     });
+    expect(searchDialog).not.toHaveAttribute("open");
   });
 
-  it("conserva la búsqueda activa al cerrarla y permite quitarla desde el chip", async () => {
-    renderApp("/movimientos?period=202608&q=maria", createServices(explorerTransactions));
+  it("cancela y restablece texto, tipo, filtros avanzados y orden sin cambiar el período", async () => {
+    const user = userEvent.setup();
+    renderApp(
+      "/movimientos?period=202608&q=maria&type=INGRESO&from=2026-08-01&to=2026-08-31&account=Caja&category=Ofrendas&status=CONFIRMED&sort=amount-asc",
+      createServices(explorerTransactions),
+    );
 
-    const searchToggle = screen.getByRole("button", {
-      name: "Ocultar búsqueda",
-      hidden: true,
-    });
-    const search = screen.getByRole("textbox", { name: "Buscar movimientos", hidden: true });
-    expect(searchToggle).toHaveAttribute("aria-expanded", "true");
-
-    fireEvent.keyDown(search, { key: "Escape" });
-
-    await waitFor(() => expect(searchToggle).toHaveFocus());
-    expect(screen.getByTestId("location")).toHaveTextContent("q=maria");
-
-    const searchChip = screen.getByRole("button", { name: /Búsqueda: maria/ });
-    fireEvent.click(searchChip);
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    expect(within(searchDialog).getByRole("textbox", { name: "Buscar movimientos" })).toHaveValue(
+      "maria",
+    );
+    await user.click(within(searchDialog).getByRole("button", { name: "Egresos" }));
+    await user.click(within(searchDialog).getByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).not.toHaveTextContent("q=maria");
+      expect(screen.getByTestId("location")).toHaveTextContent("/movimientos?period=202608");
+      expect(screen.getByRole("button", { name: "Buscar movimientos" })).toHaveFocus();
     });
+    expect(screen.getByTestId("location")).not.toHaveTextContent("q=");
+    expect(screen.getByTestId("location")).not.toHaveTextContent("type=");
+    expect(screen.getByTestId("location")).not.toHaveTextContent("from=");
+    expect(screen.getByTestId("location")).not.toHaveTextContent("sort=");
   });
 
   it("valida un rango de fechas invertido antes de aplicar los filtros avanzados", async () => {
     const user = userEvent.setup();
     renderApp("/movimientos", createServices(explorerTransactions));
 
-    const filterButton = await screen.findByRole("button", { name: "Abrir filtros" });
-    await user.click(filterButton);
+    await user.click(await screen.findByRole("button", { name: "Buscar movimientos" }));
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    await user.click(within(searchDialog).getByRole("button", { name: "Búsqueda avanzada" }));
     const filterDialog = screen.getByRole("dialog", { name: "Filtros" });
     fireEvent.change(within(filterDialog).getByLabelText("Desde"), {
       target: { value: "2026-08-20" },
@@ -936,6 +972,47 @@ describe("explorador de movimientos", () => {
     const offering = screen.getByRole("button", { name: /Ingreso: ofrendas/ });
     expect(offering).toHaveTextContent("Caja");
     expect(offering).toHaveTextContent("ofrendas");
+  });
+
+  it("muestra resultados de búsqueda sin encabezados de día y añade la fecha al contexto", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    await user.click(screen.getByRole("button", { name: "Buscar movimientos" }));
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    const search = within(searchDialog).getByRole("textbox", { name: "Buscar movimientos" });
+    await user.type(search, "maria");
+
+    const result = await within(searchDialog).findByRole("button", {
+      name: /Ingreso: Ofrenda de misión/,
+    });
+    expect(result).toHaveTextContent(/18.*ago.*2026/i);
+    expect(result).toHaveTextContent("Caja");
+    expect(result).toHaveTextContent("Ofrendas");
+    expect(searchDialog.querySelector(".transaction-day-heading")).toBeNull();
+  });
+
+  it("abre el detalle desde la búsqueda y restaura el overlay al volver", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos?period=202608&q=maria", createServices(explorerTransactions));
+
+    const searchDialog = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    const result = within(searchDialog).getByRole("button", {
+      name: /Ingreso: Ofrenda de misión/,
+    });
+    await user.click(result);
+
+    const detailDialog = await screen.findByRole("dialog", { name: "Ofrenda de misión" });
+    expect(detailDialog).toHaveAttribute("open", "");
+    await user.keyboard("{Escape}");
+
+    const restoredSearch = await screen.findByRole("dialog", { name: "Buscar movimientos" });
+    await waitFor(() => {
+      expect(restoredSearch).toHaveAttribute("open", "");
+      expect(
+        within(restoredSearch).getByRole("textbox", { name: "Buscar movimientos" }),
+      ).toHaveValue("maria");
+    });
   });
 
   it("conserva el estado accesible y marca las confirmadas para ocultarlas en móvil", async () => {
@@ -975,6 +1052,71 @@ describe("explorador de movimientos", () => {
       expect(dialog).not.toBeInTheDocument();
       expect(detailButton).toHaveFocus();
     });
+  });
+
+  it("coloca las acciones del detalle después de toda la información", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos", createServices(explorerTransactions));
+
+    const detailButton = (
+      await screen.findAllByRole("button", {
+        name: /Ingreso: Ofrenda de misión/,
+      })
+    )[0];
+    if (!detailButton) throw new Error("No se encontró el activador del detalle.");
+    await user.click(detailButton);
+
+    const dialog = screen.getByRole("dialog", { name: "Ofrenda de misión" });
+    const systemDetails = within(dialog).getByText("Información del sistema").closest("details");
+    const actionGroup = dialog.querySelector<HTMLElement>(".transaction-detail-actions");
+    if (!systemDetails || !actionGroup) throw new Error("No se encontró el orden del detalle.");
+
+    expect(
+      Boolean(
+        systemDetails.compareDocumentPosition(actionGroup) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+    expect(
+      within(actionGroup)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Editar", "Duplicar", "Anular"]);
+
+    await user.click(within(actionGroup).getByRole("button", { name: "Duplicar" }));
+    expect(await screen.findByRole("dialog", { name: /Duplicar ingreso/i })).toBeInTheDocument();
+  });
+
+  it("mantiene sólo Duplicar para anuladas y deshabilita escrituras sin permiso", async () => {
+    const user = userEvent.setup();
+    const voided = makeTransaction({
+      id: "VOIDED-AUGUST",
+      date: new Date("2026-08-22T05:00:00.000Z"),
+      type: "EGRESO",
+      description: "Movimiento anulado",
+      status: "VOIDED",
+      period: "202608",
+    });
+    const services = createServices([voided]);
+    const catalogs = await services.transactions.getCatalogs();
+    vi.spyOn(services.transactions, "getCatalogs").mockResolvedValue({
+      ...catalogs,
+      writeCapability: {
+        status: "disabled",
+        reason: "Las escrituras están deshabilitadas durante la revisión.",
+      },
+    });
+    renderApp("/movimientos?period=202608", services);
+
+    const row = await screen.findByRole("button", {
+      name: /Egreso: Movimiento anulado.*Anulada/,
+    });
+    await user.click(row);
+    const dialog = screen.getByRole("dialog", { name: "Movimiento anulado" });
+
+    expect(within(dialog).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Anular" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Duplicar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Registrar nuevo movimiento" })).toBeDisabled();
   });
 
   it("carga treinta resultados y permite mostrar el siguiente bloque", async () => {
@@ -1031,5 +1173,42 @@ describe("explorador de movimientos", () => {
     const similarEditor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
     expect(within(similarEditor).getByLabelText(/Monto/)).toHaveValue("");
     expect(within(similarEditor).getByLabelText("Descripción")).toHaveValue("");
+  });
+
+  it("permite alternar el tipo de una nueva transacción sin pedir confirmación", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    await user.click(await screen.findByRole("button", { name: "Registrar nuevo movimiento" }));
+    const editor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+
+    await user.click(within(editor).getByLabelText("Transferencia"));
+    expect(within(editor).getByLabelText("Desde")).toBeInTheDocument();
+
+    await user.click(within(editor).getByLabelText("Ingreso"));
+    expect(within(editor).getByLabelText("Cuenta")).toBeInTheDocument();
+
+    await user.click(within(editor).getByLabelText("Egreso"));
+    expect(within(editor).getByLabelText("Egreso")).toBeChecked();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("muestra la validación de una nueva transacción solo al guardarla", async () => {
+    const user = userEvent.setup();
+    renderApp("/movimientos?period=202608", createServices(explorerTransactions));
+
+    await user.click(await screen.findByRole("button", { name: "Registrar nuevo movimiento" }));
+    const editor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+    const amount = within(editor).getByLabelText(/Monto/);
+
+    fireEvent.blur(amount);
+    await user.click(within(editor).getByLabelText("Ingreso"));
+    expect(within(editor).queryByText("Revisa los campos indicados antes de guardar.")).toBeNull();
+
+    await user.click(within(editor).getByRole("button", { name: "Guardar ingreso" }));
+    expect(within(editor).getByRole("alert")).toHaveTextContent(
+      "Revisa los campos indicados antes de guardar.",
+    );
   });
 });

@@ -230,7 +230,6 @@ export function TransactionEditorSheet({
 
   const changeType = (type: TransactionType) => {
     if (type === form.type) return;
-    const crossesTransfer = type === "TRANSFERENCIA" || form.type === "TRANSFERENCIA";
     const categories = getAllowedCategories(catalogs, type);
     const categoryAllowed = categories.some((category) => category.id === form.category?.id);
     const partyAllowed = catalogs.thirdParties.some(
@@ -240,30 +239,6 @@ export function TransactionEditorSheet({
           (type === "INGRESO" && party.role === "DONANTE") ||
           (type === "EGRESO" && party.role === "PROVEEDOR")),
     );
-    const hasIncompatibleData = crossesTransfer
-      ? Boolean(
-          form.account ||
-          form.originAccount ||
-          form.destinationAccount ||
-          form.category ||
-          form.subcategory ||
-          form.paymentMethod ||
-          form.thirdParty ||
-          form.referenceOrReceipt,
-        )
-      : Boolean(
-          (form.category && !categoryAllowed) ||
-          (form.thirdParty && !partyAllowed) ||
-          (type === "INGRESO" && form.referenceOrReceipt),
-        );
-    if (
-      hasIncompatibleData &&
-      !window.confirm(
-        "Al cambiar el tipo se limpiarán los datos que no son compatibles. ¿Continuar?",
-      )
-    ) {
-      return;
-    }
     const firstCategory = activeFirst(categories);
     setForm((current) => ({
       ...current,
@@ -477,19 +452,13 @@ export function TransactionEditorSheet({
               <CurrencyInput
                 value={form.amount}
                 onChange={(value) => setField("amount", value)}
-                onBlur={() => {
-                  if (parseAmount(form.amount) === null) {
-                    setErrors((current) => ({
-                      ...current,
-                      amount: "Ingresa un monto mayor que cero, con máximo dos decimales.",
-                    }));
-                  }
-                }}
                 error={errors.amount}
                 inputRef={amountRef}
               />
               <label className="field-label">
-                Fecha <span aria-hidden="true">*</span>
+                <span className="transaction-field-label-text">
+                  Fecha <span aria-hidden="true">*</span>
+                </span>
                 <input
                   className="field"
                   type="date"

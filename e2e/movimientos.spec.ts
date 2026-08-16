@@ -1,7 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 const uniqueDescription = () => `Compra E2E ${Date.now()}`;
+
+const freezeReviewTime = async (page: Page) => {
+  await page.clock.setFixedTime(new Date("2026-08-16T17:00:00-05:00"));
+};
+
+const openFirstTransaction = async (page: Page) => {
+  const viewportWidth = page.viewportSize()?.width ?? 390;
+  if (viewportWidth >= 1024) {
+    await page.locator(".transaction-table-row-action").first().click();
+  } else {
+    await page.locator(".transaction-mobile-list .transaction-mobile-row").first().click();
+  }
+  const detail = page.locator(".transaction-detail-dialog");
+  await expect(detail).toBeVisible();
+  return detail;
+};
 
 test.describe("Movimientos CRUD en modo review", () => {
   test.use({ viewport: { width: 390, height: 844 } });
@@ -52,25 +68,30 @@ test.describe("Movimientos CRUD en modo review", () => {
 
   test("mantiene la URL al filtrar y respeta navegación Atrás", async ({ page }) => {
     await page.goto("/movimientos?period=202608");
-    await expect(page.getByRole("button", { name: /Abrir filtros/i })).toBeEnabled();
-    await page.getByRole("button", { name: /Abrir filtros/i }).click();
+    await page.getByRole("button", { name: "Buscar movimientos" }).click();
+    const searchDialog = page.getByRole("dialog", { name: "Buscar movimientos" });
+    await expect(searchDialog).toBeVisible();
+    await searchDialog.getByRole("button", { name: "Búsqueda avanzada" }).click();
     const filters = page.getByRole("dialog", { name: "Filtros" });
     await filters.getByLabel("Estado").selectOption("CONFIRMED");
     await filters.getByRole("button", { name: "Aplicar filtros" }).click();
     await expect(page).toHaveURL(/status=CONFIRMED/);
 
-    await page.getByRole("button", { name: "Buscar movimientos" }).click();
-    await page.getByRole("textbox", { name: "Buscar movimientos" }).fill("aporte");
+    await expect(searchDialog).toBeVisible();
+    await searchDialog.getByRole("textbox", { name: "Buscar movimientos" }).fill("aporte");
     await expect(page).toHaveURL(/q=aporte/);
-    await page.getByRole("button", { name: /Ingreso: Aporte mensual/i }).click();
+    await searchDialog.getByRole("button", { name: /Ingreso: Aporte mensual/i }).click();
     await expect(page).toHaveURL(/\/movimientos\/[^/?]+\?/);
     await page.goBack();
     await expect(page).toHaveURL(/status=CONFIRMED/);
     await expect(page).toHaveURL(/q=aporte/);
+    await expect(searchDialog).toBeVisible();
   });
 });
 
-test("usa una composición móvil plana y conserva la búsqueda al cerrarla", async ({ page }) => {
+test("abre una búsqueda móvil completa, cancela sus criterios y restaura q desde la URL", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/movimientos?period=202608");
@@ -93,6 +114,8 @@ test("usa una composición móvil plana y conserva la búsqueda al cerrarla", as
   expect(mobileGeometry.shadow).toBe("none");
 
   await expect(page.locator("#transaction-search-input")).toBeHidden();
+  await expect(page.locator(".transaction-toolbar .transaction-quick-filters")).toHaveCount(0);
+  await expect(page.locator(".transaction-toolbar .transaction-filter-button")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Buscar movimientos" })).toHaveAttribute(
     "aria-expanded",
     "false",
@@ -106,19 +129,25 @@ test("usa una composición móvil plana y conserva la búsqueda al cerrarla", as
   });
 
   await page.getByRole("button", { name: "Buscar movimientos" }).click();
+  const searchDialog = page.getByRole("dialog", { name: "Buscar movimientos" });
+  await expect(searchDialog).toBeVisible();
   const search = page.getByRole("textbox", { name: "Buscar movimientos" });
   await expect(search).toBeVisible();
   await expect(search).toBeFocused();
   await search.fill("aporte");
   await expect(page).toHaveURL(/q=aporte/);
+  await expect(searchDialog).toHaveScreenshot("movimientos-search-mobile.png", {
+    animations: "disabled",
+  });
 
   await search.press("Escape");
   await expect(page.locator("#transaction-search-input")).toBeHidden();
   await expect(page.getByRole("button", { name: "Buscar movimientos" })).toBeFocused();
-  await expect(page.getByRole("button", { name: /Búsqueda: aporte/ })).toBeVisible();
+  await expect(page).not.toHaveURL(/q=aporte/);
 
-  await page.reload();
-  await expect(page.getByRole("textbox", { name: "Buscar movimientos" })).toBeVisible();
+  await page.goto("/movimientos?period=202608&q=aporte");
+  await expect(page.getByRole("dialog", { name: "Buscar movimientos" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Buscar movimientos" })).toHaveValue("aporte");
 });
 
 test("restaura los contenedores y la búsqueda visible desde 768 px", async ({ page }) => {
@@ -141,13 +170,97 @@ test("restaura los contenedores y la búsqueda visible desde 768 px", async ({ p
   expect(tabletGeometry.right).toBeLessThan(768);
   expect(tabletGeometry.radius).not.toBe("0px");
 
-  await expect(page.locator("#transaction-search-input")).toBeVisible();
-  await expect(page.locator(".transaction-search-toggle")).toBeHidden();
+  await expect(page.locator("#transaction-search-input-inline")).toBeVisible();
+  await expect(page.locator(".transaction-search-toggle")).toHaveCount(0);
+  await expect(page.locator(".transaction-search-inline .transaction-quick-filters")).toBeVisible();
+  await expect(
+    page.locator(".transaction-search-inline").getByRole("button", {
+      name: "Búsqueda avanzada",
+    }),
+  ).toBeVisible();
   await expect(page.locator(".transaction-mobile-confirmed-status").first()).toBeVisible();
   await expect(toolbar).toHaveScreenshot("movimientos-toolbar-tablet.png", {
     animations: "disabled",
   });
   await expect(results).toHaveScreenshot("movimientos-results-tablet.png", {
+    animations: "disabled",
+  });
+
+  await freezeReviewTime(page);
+  const detail = await openFirstTransaction(page);
+  const detailGeometry = await detail.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    return {
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+      radius: styles.borderTopLeftRadius,
+    };
+  });
+  expect(detailGeometry.width).toBeLessThan(768);
+  expect(detailGeometry.radius).not.toBe("0px");
+  await expect(detail).toHaveScreenshot("movimientos-detail-tablet.png", {
+    animations: "disabled",
+  });
+  await detail.locator(".transaction-detail-actions").scrollIntoViewIfNeeded();
+  await expect(detail).toHaveScreenshot("movimientos-detail-actions-tablet.png", {
+    animations: "disabled",
+  });
+  await detail.getByRole("button", { name: "Cerrar detalle" }).click();
+
+  await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
+  const editor = page.getByRole("dialog", { name: /Nuevo egreso/i });
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveScreenshot("movimientos-editor-tablet.png", {
+    animations: "disabled",
+  });
+});
+
+test("aplica el detalle plano y el editor compacto en móvil", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await freezeReviewTime(page);
+  await page.goto("/movimientos?period=202608");
+
+  const detail = await openFirstTransaction(page);
+  const detailGeometry = await detail.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    return {
+      left: Math.round(bounds.left),
+      right: Math.round(bounds.right),
+      radius: styles.borderTopLeftRadius,
+    };
+  });
+  expect(detailGeometry.left).toBe(0);
+  expect(detailGeometry.right).toBe(390);
+  expect(detailGeometry.radius).not.toBe("0px");
+  await expect(detail).toHaveScreenshot("movimientos-detail-mobile.png", {
+    animations: "disabled",
+  });
+
+  await detail.locator(".transaction-detail-actions").scrollIntoViewIfNeeded();
+  await expect(detail).toHaveScreenshot("movimientos-detail-actions-mobile.png", {
+    animations: "disabled",
+  });
+  await detail.getByRole("button", { name: "Cerrar detalle" }).click();
+
+  await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
+  const editor = page.getByRole("dialog", { name: /Nuevo egreso/i });
+  await expect(editor).toBeVisible();
+  const editorGeometry = await editor.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    return {
+      left: Math.round(bounds.left),
+      right: Math.round(bounds.right),
+      radius: styles.borderTopLeftRadius,
+    };
+  });
+  expect(editorGeometry.left).toBe(0);
+  expect(editorGeometry.right).toBe(390);
+  expect(editorGeometry.radius).toBe("0px");
+  await expect(editor).toHaveScreenshot("movimientos-editor-mobile.png", {
     animations: "disabled",
   });
 });
@@ -190,6 +303,14 @@ test("cumple el escaneo WCAG AA en el listado y el editor", async ({ page }) => 
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
   expect(editorScan.violations).toEqual([]);
+
+  await editor.getByRole("button", { name: "Cerrar editor" }).click();
+  const detail = await openFirstTransaction(page);
+  const detailScan = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  expect(detailScan.violations).toEqual([]);
+  await detail.getByRole("button", { name: "Cerrar detalle" }).click();
 });
 
 test("mantiene reflow con tema claro y texto al 200 %", async ({ page }) => {
@@ -202,6 +323,18 @@ test("mantiene reflow con tema claro y texto al 200 %", async ({ page }) => {
   });
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
+    .toBe(true);
+
+  const detail = await openFirstTransaction(page);
+  await expect
+    .poll(() => detail.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+    .toBe(true);
+  await detail.getByRole("button", { name: "Cerrar detalle" }).click();
+
+  await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
+  const editor = page.getByRole("dialog", { name: /Nuevo egreso/i });
+  await expect
+    .poll(() => editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
     .toBe(true);
 });
 
@@ -237,11 +370,21 @@ for (const width of [320, 390, 767, 768, 1024, 1440]) {
     ).toBeLessThanOrEqual(layout.viewportWidth + 1);
 
     if (width === 320) {
+      await page.getByRole("button", { name: "Buscar movimientos" }).click();
+      const searchDialog = page.getByRole("dialog", { name: "Buscar movimientos" });
+      await expect(searchDialog).toBeVisible();
       const quickFiltersScroll = await page
-        .locator(".transaction-quick-filters")
+        .locator(".transaction-search-dialog .transaction-quick-filters")
         .evaluate((element) => element.scrollWidth > element.clientWidth);
       expect(quickFiltersScroll).toBe(true);
+      await searchDialog.getByRole("button", { name: "Cancelar" }).click();
     }
+
+    const detail = await openFirstTransaction(page);
+    await expect
+      .poll(() => detail.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+      .toBe(true);
+    await detail.getByRole("button", { name: "Cerrar detalle" }).click();
 
     await page.getByRole("button", { name: "Registrar nuevo movimiento" }).click();
     const editor = page.getByRole("dialog", { name: /Nuevo egreso/i });
