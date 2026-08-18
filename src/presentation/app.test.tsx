@@ -1002,7 +1002,7 @@ describe("explorador de movimientos", () => {
     });
     await user.click(result);
 
-    const detailDialog = await screen.findByRole("dialog", { name: "Ofrenda de misión" });
+    const detailDialog = await screen.findByRole("dialog", { name: "Detalle de transacción" });
     expect(detailDialog).toHaveAttribute("open", "");
     await user.keyboard("{Escape}");
 
@@ -1041,9 +1041,25 @@ describe("explorador de movimientos", () => {
     if (!detailButton) throw new Error("No se encontró el activador del detalle.");
     await user.click(detailButton);
 
-    const dialog = screen.getByRole("dialog", { name: "Ofrenda de misión" });
-    expect(within(dialog).getByText("Trazabilidad")).toBeInTheDocument();
-    expect(within(dialog).getByText("Donante / Proveedor")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Detalle de transacción" });
+    expect(within(dialog).getByText("Detalle de transacción")).toBeInTheDocument();
+    expect(within(dialog).getByText("Donante")).toBeInTheDocument();
+    expect(dialog.querySelector(".transaction-detail-summary")).toHaveTextContent("Efectivo");
+    expect(within(dialog).queryByText("Método de pago")).not.toBeInTheDocument();
+    expect(
+      Array.from(dialog.querySelectorAll<HTMLElement>(".transaction-detail-row dt")).map(
+        (label) => label.textContent,
+      ),
+    ).toEqual([
+      "Cuenta",
+      "Categoría",
+      "Donante",
+      "Descripción",
+      "Estado",
+      "Fecha",
+      "Responsable",
+      "Comprobante",
+    ]);
     expect(within(dialog).getByRole("button", { name: "Cerrar detalle" })).toHaveFocus();
 
     await user.keyboard("{Escape}");
@@ -1066,7 +1082,7 @@ describe("explorador de movimientos", () => {
     if (!detailButton) throw new Error("No se encontró el activador del detalle.");
     await user.click(detailButton);
 
-    const dialog = screen.getByRole("dialog", { name: "Ofrenda de misión" });
+    const dialog = screen.getByRole("dialog", { name: "Detalle de transacción" });
     const systemDetails = within(dialog).getByText("Información del sistema").closest("details");
     const actionGroup = dialog.querySelector<HTMLElement>(".transaction-detail-actions");
     if (!systemDetails || !actionGroup) throw new Error("No se encontró el orden del detalle.");
@@ -1111,7 +1127,7 @@ describe("explorador de movimientos", () => {
       name: /Egreso: Movimiento anulado.*Anulada/,
     });
     await user.click(row);
-    const dialog = screen.getByRole("dialog", { name: "Movimiento anulado" });
+    const dialog = screen.getByRole("dialog", { name: "Detalle de transacción" });
 
     expect(within(dialog).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Anular" })).not.toBeInTheDocument();

@@ -4,14 +4,65 @@ import { formatDate, formatMoney, formatPeriod } from "../../formatters";
 import {
   getAmountClass,
   getAmountPrefix,
-  getTransactionAccountsLabel,
   getTransactionConcept,
+  getTransactionTypeClass,
   getTransactionTypeIcon,
   getTransactionTypeLabel,
 } from "./transaction-ui";
 import { getTransactionMutationError } from "./transaction-errors";
 
 const optional = (value: string | null): string => value ?? "Sin información";
+
+const getTransactionPaymentMethod = (transaction: LogicalTransaction): string =>
+  transaction.kind === "transfer" ? "Transferencia" : transaction.paymentMethod;
+
+interface TransactionDetailRow {
+  label: string;
+  value: string;
+  status?: boolean;
+}
+
+const getStatusIcon = (status: LogicalTransaction["status"]): string => {
+  if (status === "CONFIRMED") return "✅";
+  if (status === "PENDING") return "⏳";
+  return "⛔";
+};
+
+const getTransactionDetailRows = (transaction: LogicalTransaction): TransactionDetailRow[] => {
+  const rows: TransactionDetailRow[] = [];
+
+  if (transaction.kind === "single") {
+    rows.push(
+      { label: "Cuenta", value: transaction.account },
+      {
+        label: "Categoría",
+        value: [transaction.category, transaction.subcategory].filter(Boolean).join(" › "),
+      },
+      {
+        label: transaction.type === "INGRESO" ? "Donante" : "Proveedor",
+        value: optional(transaction.donorOrProvider),
+      },
+    );
+  } else {
+    rows.push(
+      { label: "Desde", value: transaction.originAccount },
+      { label: "Hacia", value: transaction.destinationAccount },
+    );
+  }
+
+  rows.push(
+    { label: "Descripción", value: optional(transaction.description) },
+    { label: "Estado", value: getTransactionStatusLabel(transaction.status), status: true },
+    { label: "Fecha", value: formatDate(transaction.date) },
+    { label: "Responsable", value: transaction.responsible },
+  );
+
+  if (transaction.kind === "single") {
+    rows.push({ label: "Comprobante", value: optional(transaction.referenceOrReceipt) });
+  }
+
+  return rows;
+};
 
 function VoidTransactionDialog({
   transaction,
@@ -167,6 +218,7 @@ export function TransactionDetailSheet({
         className="transaction-detail-dialog"
         ref={dialogRef}
         aria-labelledby="transaction-detail-title"
+        aria-describedby="transaction-detail-context"
         onKeyDown={(event) => {
           if (event.key !== "Escape") return;
           event.preventDefault();
@@ -180,17 +232,12 @@ export function TransactionDetailSheet({
         <div className="transaction-detail-content transaction-movements-detail-content">
           <header className="transaction-sheet-header">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-                {getTransactionTypeIcon(transaction.type)}{" "}
-                {getTransactionTypeLabel(transaction.type)} ·{" "}
-                {getTransactionStatusLabel(transaction.status)}
-              </p>
-              <h2
-                className="mt-1 truncate text-lg font-semibold text-slate-100"
-                id="transaction-detail-title"
-              >
-                {concept}
+              <h2 className="text-lg font-semibold text-slate-100" id="transaction-detail-title">
+                Detalle de transacción
               </h2>
+              <p className="sr-only" id="transaction-detail-context">
+                {concept}
+              </p>
             </div>
             <button
               className="transaction-icon-button"
@@ -205,75 +252,42 @@ export function TransactionDetailSheet({
 
           <div className="transaction-detail-body">
             <section className="transaction-detail-hero" aria-label="Resumen de la transacción">
+              <span
+                className={`transaction-detail-type-badge ${getTransactionTypeClass(transaction.type)}`}
+              >
+                <span aria-hidden="true">{getTransactionTypeIcon(transaction.type)}</span>
+                {getTransactionTypeLabel(transaction.type)}
+              </span>
               <p className={`transaction-detail-amount ${getAmountClass(transaction)}`}>
                 {getAmountPrefix(transaction)}
                 {formatMoney(transaction.amount)}
               </p>
-              <p className="mt-2 text-sm text-slate-300">{formatDate(transaction.date)}</p>
-              <p className="mt-1 text-sm text-slate-400">
-                {getTransactionAccountsLabel(transaction)}
+              <p className="transaction-detail-summary">
+                <span>{formatDate(transaction.date)}</span>
+                <span aria-hidden="true"> · </span>
+                <span>{getTransactionPaymentMethod(transaction)}</span>
               </p>
             </section>
 
-            {transaction.kind === "single" ? (
-              <section aria-labelledby="detail-classification-title">
-                <h3 className="transaction-detail-section-title" id="detail-classification-title">
-                  Clasificación
-                </h3>
-                <dl className="transaction-detail-grid">
-                  <div className="transaction-detail-field">
-                    <dt>Categoría</dt>
-                    <dd>{transaction.category}</dd>
+            <section aria-label="Datos de la transacción">
+              <dl className="transaction-detail-list">
+                {getTransactionDetailRows(transaction).map((row) => (
+                  <div className="transaction-detail-row" key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>
+                      {row.status ? (
+                        <span
+                          className={`transaction-detail-status transaction-status-${transaction.status.toLocaleLowerCase()}`}
+                        >
+                          <span aria-hidden="true">{getStatusIcon(transaction.status)}</span>
+                          {row.value}
+                        </span>
+                      ) : (
+                        row.value
+                      )}
+                    </dd>
                   </div>
-                  <div className="transaction-detail-field">
-                    <dt>Subcategoría</dt>
-                    <dd>{optional(transaction.subcategory)}</dd>
-                  </div>
-                </dl>
-              </section>
-            ) : (
-              <section aria-labelledby="detail-transfer-title">
-                <h3 className="transaction-detail-section-title" id="detail-transfer-title">
-                  Cuentas vinculadas
-                </h3>
-                <dl className="transaction-detail-grid">
-                  <div className="transaction-detail-field">
-                    <dt>Desde</dt>
-                    <dd>{transaction.originAccount}</dd>
-                  </div>
-                  <div className="transaction-detail-field">
-                    <dt>Hacia</dt>
-                    <dd>{transaction.destinationAccount}</dd>
-                  </div>
-                </dl>
-              </section>
-            )}
-
-            <section aria-labelledby="detail-trace-title">
-              <h3 className="transaction-detail-section-title" id="detail-trace-title">
-                Trazabilidad
-              </h3>
-              <dl className="transaction-detail-grid">
-                <div className="transaction-detail-field">
-                  <dt>Responsable</dt>
-                  <dd>{transaction.responsible}</dd>
-                </div>
-                {transaction.kind === "single" ? (
-                  <>
-                    <div className="transaction-detail-field">
-                      <dt>Donante / Proveedor</dt>
-                      <dd>{optional(transaction.donorOrProvider)}</dd>
-                    </div>
-                    <div className="transaction-detail-field">
-                      <dt>Método de pago</dt>
-                      <dd>{transaction.paymentMethod}</dd>
-                    </div>
-                    <div className="transaction-detail-field">
-                      <dt>Comprobante</dt>
-                      <dd>{optional(transaction.referenceOrReceipt)}</dd>
-                    </div>
-                  </>
-                ) : null}
+                ))}
               </dl>
             </section>
 

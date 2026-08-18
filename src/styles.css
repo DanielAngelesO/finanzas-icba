@@ -4254,18 +4254,99 @@ html[data-theme="dark"] {
 }
 
 .transaction-movements-detail-content .transaction-detail-hero {
+  display: grid;
+  gap: 0;
   border-bottom: 1px solid var(--ui-border-subtle);
   border-radius: 0;
-  padding: 0.25rem 0 0.75rem;
+  padding: 0.25rem 0 1rem;
   background: transparent;
 }
 
-.transaction-detail-amount {
-  font-size: clamp(1.75rem, 8vw, 2.5rem);
+.transaction-detail-type-badge {
+  justify-self: start;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
   font-weight: 750;
-  line-height: 1.1;
+}
+
+.transaction-detail-amount {
+  margin: 1.25rem 0 0;
+  font-size: clamp(2.25rem, 11vw, 3.75rem);
+  font-weight: 750;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+.transaction-detail-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.625rem 0 0;
+  font-size: clamp(0.9rem, 3.5vw, 1.125rem);
+  line-height: 1.4;
+  color: var(--ui-text-muted);
+}
+
+.transaction-detail-list {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 0.72fr) minmax(0, 1.28fr);
+}
+
+.transaction-detail-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(6.5rem, 0.72fr) minmax(0, 1.28fr);
+  align-items: start;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 3.5rem;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  padding: 0.875rem 0;
+}
+
+.transaction-detail-row dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--ui-text-muted);
+}
+
+.transaction-detail-row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: right;
+  color: var(--ui-text);
+}
+
+.transaction-detail-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.transaction-detail-status.transaction-status-confirmed {
+  color: var(--ui-success-text);
+}
+
+.transaction-detail-status.transaction-status-pending {
+  color: var(--ui-warning-text);
+}
+
+.transaction-detail-status.transaction-status-voided {
+  color: var(--ui-text-muted);
 }
 
 .transaction-movements-detail-content .transaction-detail-actions {
@@ -4278,31 +4359,6 @@ html[data-theme="dark"] {
 
 .transaction-movements-detail-content .transaction-detail-actions > button {
   min-height: 2.75rem;
-}
-
-.transaction-movements-detail-content .transaction-detail-section-title {
-  margin-bottom: 0.5rem;
-}
-
-.transaction-movements-detail-content .transaction-detail-grid {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-}
-
-.transaction-movements-detail-content .transaction-detail-field {
-  border: 0;
-  border-bottom: 1px solid var(--ui-border-subtle);
-  border-radius: 0;
-  padding: 0.625rem 0;
-  background: transparent;
-}
-
-.transaction-movements-detail-content .transaction-detail-field dt {
-  font-size: 0.6875rem;
-}
-
-.transaction-movements-detail-content .transaction-detail-field dd {
-  margin-top: 0.2rem;
 }
 
 .transaction-system-grid {
@@ -4515,37 +4571,6 @@ textarea:focus-visible {
   .transaction-editor-content > .transaction-editor-footer {
     gap: 0.75rem;
     padding: 0.875rem 1rem max(0.875rem, env(safe-area-inset-bottom));
-  }
-
-  .transaction-movements-detail-content .transaction-detail-hero {
-    border-bottom: 0;
-    border-radius: 1rem;
-    padding: 1rem;
-    background: var(--ui-surface-inset);
-  }
-
-  .transaction-movements-detail-content .transaction-detail-section-title {
-    margin-bottom: 0.75rem;
-  }
-
-  .transaction-movements-detail-content .transaction-detail-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-  }
-
-  .transaction-movements-detail-content .transaction-detail-field {
-    border: 1px solid var(--ui-border-subtle);
-    border-radius: 0.75rem;
-    padding: 0.875rem;
-    background: var(--ui-surface-inset);
-  }
-
-  .transaction-movements-detail-content .transaction-detail-field dt {
-    font-size: 0.75rem;
-  }
-
-  .transaction-movements-detail-content .transaction-detail-field dd {
-    margin-top: 0.375rem;
   }
 
   .transaction-movements-detail-content .transaction-detail-actions {

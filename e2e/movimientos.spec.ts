@@ -44,7 +44,7 @@ test.describe("Movimientos CRUD en modo review", () => {
     await expect(page).toHaveURL(/\/movimientos\?period=202608&type=EGRESO/);
 
     await page.getByRole("button", { name: new RegExp(`Egreso: ${description}`) }).click();
-    const detail = page.getByRole("dialog", { name: description });
+    const detail = page.getByRole("dialog", { name: "Detalle de transacción" });
     await expect(detail).toBeVisible();
     await detail.getByRole("button", { name: "Editar" }).click();
 
@@ -54,7 +54,7 @@ test.describe("Movimientos CRUD en modo review", () => {
     await expect(page.getByText("Egreso actualizado")).toBeVisible();
 
     await page.getByRole("button", { name: new RegExp(`Egreso: ${editedDescription}`) }).click();
-    const updatedDetail = page.getByRole("dialog", { name: editedDescription });
+    const updatedDetail = page.getByRole("dialog", { name: "Detalle de transacción" });
     await updatedDetail.getByRole("button", { name: "Anular" }).click();
 
     const voidDialog = page.getByRole("alertdialog", { name: "Anular transacción" });
