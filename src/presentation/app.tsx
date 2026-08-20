@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useMemo } from "react";
 import type { AppConfig } from "../config/google-sheets";
 import { createReviewServices, createServices, type AppServices } from "../composition/services";
@@ -45,9 +45,25 @@ function UnconfiguredPage({ errors }: { errors: string[] }) {
   );
 }
 
+function SessionRestoreScreen() {
+  return (
+    <main className="auth-page grid min-h-screen place-items-center px-4 text-slate-100">
+      <p className="animate-fade-in-up text-sm text-slate-400" role="status">
+        Restaurando sesión…
+      </p>
+    </main>
+  );
+}
+
 function ProtectedContent({ children }: { children: React.ReactNode }) {
   const { state } = useAuth();
-  return state.status === "authenticated" ? <>{children}</> : <Navigate to="/ingresar" replace />;
+  const location = useLocation();
+  if (state.status === "restoring") return <SessionRestoreScreen />;
+  return state.status === "authenticated" ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/ingresar" replace state={{ from: location }} />
+  );
 }
 
 export function AppRoutes({ services }: { services: AppServices }) {

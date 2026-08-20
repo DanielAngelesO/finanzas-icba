@@ -75,6 +75,20 @@ const authenticatedUser: AuthContextValue = {
   signOut: () => {},
 };
 
+const restoringUser: AuthContextValue = {
+  state: { status: "restoring" },
+  signIn: () => {},
+  retryPreparation: () => {},
+  signOut: () => {},
+};
+
+const readyUser: AuthContextValue = {
+  state: { status: "ready" },
+  signIn: () => {},
+  retryPreparation: () => {},
+  signOut: () => {},
+};
+
 class FailingDashboardOverviewUseCase extends GetDashboardOverviewUseCase {
   public override async execute(): Promise<DashboardOverview> {
     throw new Error("No se pudo consultar el resumen.");
@@ -86,7 +100,11 @@ function LocationProbe() {
   return <span data-testid="location">{location.pathname + location.search}</span>;
 }
 
-const renderApp = (initialEntry: string, services = createServices()) => {
+const renderApp = (
+  initialEntry: string,
+  services = createServices(),
+  auth: AuthContextValue = authenticatedUser,
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -94,7 +112,7 @@ const renderApp = (initialEntry: string, services = createServices()) => {
   return render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={authenticatedUser}>
+        <AuthContext.Provider value={auth}>
           <MemoryRouter initialEntries={[initialEntry]}>
             <AppRoutes services={services} />
             <LocationProbe />
@@ -123,6 +141,21 @@ describe("navegación principal", () => {
 
     expect(await screen.findByRole("heading", { name: "Inicio" })).toBeInTheDocument();
     expect(screen.getByText(/^Versión v\d+\.\d+\.\d+ · /)).toBeInTheDocument();
+  });
+
+  it("conserva la ruta actual mientras se restaura la sesión tras una recarga", () => {
+    renderApp("/movimientos?period=202608", createServices(), restoringUser);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Restaurando sesión…");
+    expect(screen.getByTestId("location")).toHaveTextContent("/movimientos?period=202608");
+    expect(screen.queryByRole("button", { name: /Ingresar con Google/ })).not.toBeInTheDocument();
+  });
+
+  it("redirige a Ingresar sin sesión y recuerda la ruta de origen", () => {
+    renderApp("/movimientos?period=202608", createServices(), readyUser);
+
+    expect(screen.getByRole("button", { name: /Ingresar con Google/ })).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/ingresar");
   });
 
   it("presenta una entrada ejecutiva y conserva Resumen como opción separada", async () => {

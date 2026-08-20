@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/auth-context";
 import { AppVersion } from "../components/app-version";
 import { ThemeSelector } from "../components/theme-selector";
@@ -26,9 +26,22 @@ function GoogleIcon() {
   );
 }
 
+interface LoginRedirectState {
+  from?: { pathname?: string; search?: string };
+}
+
+const getRedirectTarget = (state: unknown): string => {
+  const from = (state as LoginRedirectState | null)?.from;
+  if (!from?.pathname || !from.pathname.startsWith("/")) return "/";
+  return `${from.pathname}${from.search ?? ""}`;
+};
+
 export function LoginPage() {
   const { state, signIn, retryPreparation } = useAuth();
-  if (state.status === "authenticated") return <Navigate to="/" replace />;
+  const location = useLocation();
+  if (state.status === "authenticated") {
+    return <Navigate to={getRedirectTarget(location.state)} replace />;
+  }
   const restoring = state.status === "restoring";
   const preparing = state.status === "preparing";
   const authorizing = state.status === "authorizing";
