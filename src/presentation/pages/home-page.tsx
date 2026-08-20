@@ -9,6 +9,7 @@ import {
   ExecutiveResultCard,
   ExecutiveTrendChart,
 } from "../components/home-executive-widgets";
+import { IncomeScopeToggle } from "../components/dashboard-income-scope-toggle";
 import { formatCompactDate, formatPeriod } from "../formatters";
 
 const getSelectedPeriod = (
@@ -33,19 +34,6 @@ function ArrowRightIcon() {
         fillRule="evenodd"
         d="M3 10a.75.75 0 0 1 .75-.75h10.69l-3.22-3.22a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 1 1-1.06-1.06l3.22-3.22H3.75A.75.75 0 0 1 3 10Z"
         clipRule="evenodd"
-      />
-    </svg>
-  );
-}
-
-function ContributionsIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-      <path
-        d="M10 2.75v14.5M13 5.5c-.72-.58-1.72-.9-3-.9-2.13 0-3.5 1.04-3.5 2.55 0 1.65 1.37 2.3 3.56 2.8 2.19.5 3.44 1.18 3.44 2.8 0 1.53-1.32 2.65-3.5 2.65-1.42 0-2.62-.39-3.5-1.16"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
       />
     </svg>
   );
@@ -144,7 +132,7 @@ export function HomePage({ services }: { services: AppServices }) {
           </p>
         </div>
         <div className="home-toolbar-controls">
-          <label className="home-period-control">
+          <label className="period-control">
             <span>Período</span>
             <select
               className="field"
@@ -158,19 +146,11 @@ export function HomePage({ services }: { services: AppServices }) {
               ))}
             </select>
           </label>
-          <button
-            aria-label="Filtrar por solo aportes: diezmos y ofrendas"
-            aria-pressed={incomeScope === "CONTRIBUTIONS"}
-            className="home-scope-toggle"
-            onClick={() =>
-              updateIncomeScope(incomeScope === "CONTRIBUTIONS" ? "ALL" : "CONTRIBUTIONS")
-            }
-            title="Mostrar solo diezmos y ofrendas"
-            type="button"
-          >
-            <ContributionsIcon />
-            <span>Solo aportes</span>
-          </button>
+          <IncomeScopeToggle
+            label="Filtrar por solo aportes: diezmos y ofrendas"
+            onChange={updateIncomeScope}
+            scope={incomeScope}
+          />
         </div>
       </header>
 

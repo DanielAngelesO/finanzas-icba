@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +21,7 @@ import { ThemeProvider } from "./theme/theme-provider";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const invalidIssue: TransactionValidationIssue = {
@@ -345,6 +346,24 @@ describe("navegación principal", () => {
         amount: 50,
         category: "Materiales",
       }),
+      makeTransaction({
+        id: "AUG-ZERO-INCOME",
+        period: "202608",
+        date: new Date("2026-08-06T12:00:00.000Z"),
+        type: "INGRESO",
+        account: "Cuenta sin saldo",
+        amount: 120,
+        category: "Donación especial",
+      }),
+      makeTransaction({
+        id: "AUG-ZERO-EXPENSE",
+        period: "202608",
+        date: new Date("2026-08-07T12:00:00.000Z"),
+        type: "EGRESO",
+        account: "Cuenta sin saldo",
+        amount: 120,
+        category: "Materiales",
+      }),
     ]);
     renderApp("/", services);
 
@@ -352,6 +371,7 @@ describe("navegación principal", () => {
     expect(screen.getByRole("heading", { name: "Inicio", level: 1 })).toHaveClass("sr-only");
     expect(within(accountPosition).getByText("Cuenta corriente")).toBeInTheDocument();
     expect(within(accountPosition).getByText("Caja chica")).toBeInTheDocument();
+    expect(within(accountPosition).queryByText("Cuenta sin saldo")).not.toBeInTheDocument();
     expect(within(accountPosition).getByText("Total disponible")).toBeInTheDocument();
     expect(within(accountPosition).getByText(/250\.00/)).toBeInTheDocument();
     expect(accountPosition).toHaveTextContent("Todos los ingresos, egresos y transferencias.");
@@ -499,13 +519,10 @@ describe("navegación principal", () => {
     const execute = vi.spyOn(services.dashboard, "execute");
     renderApp("/resumen?income=invalid&period=202608", services);
 
-    const scopeControl = await screen.findByRole("group", {
-      name: "Alcance global de ingresos",
+    const scopeToggle = await screen.findByRole("button", {
+      name: "Filtrar por solo aportes: diezmos y ofrendas",
     });
-    expect(within(scopeControl).getAllByRole("radio")).toHaveLength(2);
-    expect(
-      within(scopeControl).getByRole("radio", { name: "Solo diezmos + ofrendas" }),
-    ).toBeChecked();
+    expect(scopeToggle).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("status")).toHaveTextContent(
       "Hay 1 fila inválida que no se incluyen en los totales.",
     );
@@ -518,12 +535,10 @@ describe("navegación principal", () => {
     expect(within(incomeCards).getByText("Ofrendas")).toBeInTheDocument();
     expect(execute).toHaveBeenCalledTimes(1);
 
-    await user.click(within(scopeControl).getByRole("radio", { name: "Total con otros ingresos" }));
+    await user.click(scopeToggle);
 
     await waitFor(() => {
-      expect(
-        within(scopeControl).getByRole("radio", { name: "Total con otros ingresos" }),
-      ).toBeChecked();
+      expect(scopeToggle).toHaveAttribute("aria-pressed", "false");
       expect(screen.getByTestId("location")).toHaveTextContent("income=all");
       expect(screen.getByTestId("location")).toHaveTextContent("period=202608");
     });
@@ -546,6 +561,62 @@ describe("navegación principal", () => {
       );
     });
     expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("convierte los filtros en un dock flotante al desplazarse y sincroniza la URL", async () => {
+    const user = userEvent.setup();
+    type MockEntry = { boundingClientRect: { top: number }; isIntersecting: boolean };
+    const observers: Array<{ callback: (entries: MockEntry[]) => void }> = [];
+
+    class MockIntersectionObserver {
+      constructor(callback: (entries: MockEntry[]) => void) {
+        observers.push({ callback });
+      }
+
+      disconnect() {}
+      observe() {}
+      unobserve() {}
+    }
+
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    renderApp("/resumen?period=202608");
+
+    expect(await screen.findByRole("region", { name: "Filtros del resumen" })).toBeInTheDocument();
+    expect(screen.queryByText("Fecha de corte")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("region", { name: "Filtros del resumen" })).toHaveLength(1);
+
+    act(() => {
+      observers[0]?.callback([{ boundingClientRect: { top: -120 }, isIntersecting: false }]);
+    });
+
+    const [staticBar, dock] = screen.getAllByRole("region", { name: "Filtros del resumen" });
+    if (!staticBar || !dock) throw new Error("No se encontró el dock flotante del resumen.");
+    expect(
+      within(dock).getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(
+      within(dock).getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("income=all");
+    });
+    expect(
+      within(dock).getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      within(staticBar).getByRole("button", {
+        name: "Filtrar por solo aportes: diezmos y ofrendas",
+      }),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    await user.selectOptions(within(dock).getByRole("combobox", { name: "Período" }), "202607");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("period=202607");
+      expect(screen.getByTestId("location")).toHaveTextContent("income=all");
+    });
   });
 
   it("muestra los indicadores y comparaciones de ambos escenarios financieros", async () => {
@@ -651,7 +722,9 @@ describe("navegación principal", () => {
     expect(within(incomeCards).getByText("Ingresos totales")).toBeInTheDocument();
     expect(screen.getAllByText("No aplica")).toHaveLength(2);
 
-    await user.click(screen.getByRole("radio", { name: "Total con otros ingresos" }));
+    await user.click(
+      screen.getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
+    );
     expect(within(incomeCards).getByText("Aportes")).toBeInTheDocument();
     expect(within(incomeCards).getByText("Otros ingresos")).toBeInTheDocument();
     expect(within(incomeCards).getByText("Ingresos totales")).toBeInTheDocument();

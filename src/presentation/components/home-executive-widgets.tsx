@@ -196,6 +196,7 @@ export function ExecutiveAccountPosition({
   dataCutoff: Date | null;
 }) {
   const cutoffLabel = dataCutoff ? formatCompactDate(dataCutoff) : "Sin movimientos";
+  const accountsWithBalance = position.accounts.filter((account) => account.balance !== 0);
 
   return (
     <section className="home-panel home-account-position" aria-labelledby="account-position-title">
@@ -210,9 +211,13 @@ export function ExecutiveAccountPosition({
       <p className="home-account-position-description">
         Todos los ingresos, egresos y transferencias.
       </p>
-      {position.accounts.length > 0 ? (
+      {position.accounts.length === 0 ? (
+        <p className="home-account-position-empty">Aún no hay cuentas con movimientos.</p>
+      ) : accountsWithBalance.length === 0 ? (
+        <p className="home-account-position-empty">No hay cuentas con saldo.</p>
+      ) : (
         <dl className="home-account-list">
-          {position.accounts.map((account) => (
+          {accountsWithBalance.map((account) => (
             <div key={account.account}>
               <dt title={account.account}>{account.account}</dt>
               <dd data-tone={account.balance < 0 ? "negative" : "positive"}>
@@ -221,8 +226,6 @@ export function ExecutiveAccountPosition({
             </div>
           ))}
         </dl>
-      ) : (
-        <p className="home-account-position-empty">Aún no hay cuentas con movimientos.</p>
       )}
       <div className="home-account-total">
         <span>Total disponible</span>

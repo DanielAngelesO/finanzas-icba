@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { AppServices } from "../../composition/services";
 import type { DashboardIncomeScope } from "../../domain/dashboard";
-import type { ConnectionStatus } from "../../domain/diagnostics";
 import {
   DashboardAnalysisTabs,
   type DashboardAnalysisTab,
@@ -12,7 +11,7 @@ import {
   FinancialTrendChart,
   IncomeGroupCompositionTrendChart,
 } from "../components/dashboard-annual-widgets";
-import { IncomeScopeSelector } from "../components/dashboard-income-scope-selector";
+import { DashboardContextBar } from "../components/dashboard-context-bar";
 import {
   ExpenseSummaryCard,
   FinancialScenarioCard,
@@ -28,19 +27,7 @@ import {
   PeriodIncomeBehaviorChart,
 } from "../components/dashboard-period-trend-widgets";
 import { RecentTransactionList } from "../components/dashboard-recent-activity";
-import { StatusBadge } from "../components/status-badge";
 import { getIncomeScopeLabel } from "../dashboard-income-presentation";
-import { formatDate, formatPeriod } from "../formatters";
-
-const getConnectionStatus = (
-  isPending: boolean,
-  isError: boolean,
-  status: ConnectionStatus | undefined,
-): ConnectionStatus => {
-  if (isPending) return "CONNECTING";
-  if (status) return status;
-  return isError ? "ERROR" : "UNCONFIGURED";
-};
 
 const readIncomeScope = (value: string | null): DashboardIncomeScope =>
   value === "all" ? "ALL" : "CONTRIBUTIONS";
@@ -82,15 +69,6 @@ export function DashboardPage({ services }: { services: AppServices }) {
     queryFn: () => services.dashboard.execute(requestedPeriod),
     placeholderData: keepPreviousData,
   });
-  const connection = useQuery({
-    queryKey: ["connection"],
-    queryFn: () => services.dataSource.checkConnection(),
-  });
-  const connectionStatus = getConnectionStatus(
-    connection.isPending,
-    connection.isError,
-    connection.data?.status,
-  );
   const selectedPeriod =
     requestedPeriod && overview.data?.availablePeriods.includes(requestedPeriod)
       ? requestedPeriod
@@ -111,13 +89,8 @@ export function DashboardPage({ services }: { services: AppServices }) {
   if (overview.isPending) {
     return (
       <div className="space-y-8 animate-fade-in-up" aria-busy="true" aria-live="polite">
-        <section className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="page-title">Resumen financiero</h2>
-            <p className="page-subtitle">Cargando la información del período.</p>
-          </div>
-          <StatusBadge status={connectionStatus} />
-        </section>
+        <h2 className="sr-only">Resumen financiero</h2>
+        <p className="sr-only">Cargando la información del período.</p>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
           {[0, 1, 2, 3, 4, 5].map((index) => (
             <div className="shimmer h-32" key={index} />
@@ -130,7 +103,7 @@ export function DashboardPage({ services }: { services: AppServices }) {
   if (overview.isError || !overview.data) {
     return (
       <section className="space-y-4 animate-fade-in-up" role="alert">
-        <h2 className="page-title">Resumen financiero</h2>
+        <h2 className="sr-only">Resumen financiero</h2>
         <p className="alert-error">No se pudo cargar el resumen financiero.</p>
         <button className="button-secondary" type="button" onClick={() => void overview.refetch()}>
           Reintentar
@@ -157,13 +130,7 @@ export function DashboardPage({ services }: { services: AppServices }) {
   ) {
     return (
       <div className="space-y-8 animate-fade-in-up">
-        <section className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="page-title">Resumen financiero</h2>
-            <p className="page-subtitle">No hay períodos financieros disponibles todavía.</p>
-          </div>
-          <StatusBadge status={connectionStatus} />
-        </section>
+        <h2 className="sr-only">Resumen financiero</h2>
         <section className="empty-state">
           <p className="font-medium text-slate-200">
             Aún no hay transacciones válidas para resumir.
@@ -179,21 +146,6 @@ export function DashboardPage({ services }: { services: AppServices }) {
     );
   }
 
-  const selectedPeriodLabel = data.selectedPeriod
-    ? formatPeriod(data.selectedPeriod)
-    : "el período seleccionado";
-  const comparisonLabel =
-    data.comparison.window.kind === "THROUGH_DAY"
-      ? "Al corte del " +
-        (data.dataCutoff ? formatDate(data.dataCutoff) : "período") +
-        " vs al día " +
-        data.comparison.window.throughDay +
-        " de " +
-        formatPeriod(data.comparison.window.previousPeriod)
-      : selectedPeriodLabel +
-        " completo vs " +
-        formatPeriod(data.comparison.window.previousPeriod) +
-        " completo";
   const periodAnalysis = (
     <div className="space-y-6">
       <PeriodFinancialTrendChart scope={incomeScope} trend={data.periodDailyTrend} />
@@ -217,59 +169,16 @@ export function DashboardPage({ services }: { services: AppServices }) {
 
   return (
     <div className="space-y-9 animate-fade-in-up lg:space-y-10">
-      <header className="space-y-5 border-b border-slate-800/80 pb-7 lg:flex lg:items-end lg:justify-between lg:gap-8 lg:space-y-0">
-        <div className="max-w-xl">
-          <h2 className="page-title">Resumen financiero</h2>
-          <p className="page-subtitle">
-            Diferencia los aportes, otros ingresos y el resultado contable del período.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={connectionStatus} />
-          {overview.isPlaceholderData ? (
-            <span className="text-xs text-slate-400" aria-live="polite">
-              Actualizando…
-            </span>
-          ) : null}
-        </div>
-      </header>
+      <h2 className="sr-only">Resumen financiero</h2>
 
-      <section
-        className="dashboard-context-bar"
-        aria-busy={overview.isPlaceholderData}
-        aria-label="Contexto del análisis"
-      >
-        <label className="field-label min-w-0">
-          Período
-          <select
-            className="field"
-            value={selectedPeriod}
-            onChange={(event) => updatePeriod(event.target.value)}
-          >
-            {data.availablePeriods.map((period) => (
-              <option key={period} value={period}>
-                {formatPeriod(period)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="min-w-0">
-          <p className="field-label">Estadísticas</p>
-          <IncomeScopeSelector
-            label="Alcance global de ingresos"
-            onChange={updateIncomeScope}
-            scope={incomeScope}
-          />
-        </div>
-        <div className="dashboard-context-detail">
-          <p>Fecha de corte</p>
-          <strong>{data.dataCutoff ? formatDate(data.dataCutoff) : "Sin movimientos"}</strong>
-        </div>
-        <div className="dashboard-context-detail">
-          <p>Comparación</p>
-          <strong>{comparisonLabel}</strong>
-        </div>
-      </section>
+      <DashboardContextBar
+        availablePeriods={data.availablePeriods}
+        onPeriodChange={updatePeriod}
+        onScopeChange={updateIncomeScope}
+        scope={incomeScope}
+        selectedPeriod={selectedPeriod}
+        updating={overview.isPlaceholderData}
+      />
 
       {data.dataQuality.invalidTransactionCount > 0 ? (
         <section className="alert-warning" role="status">

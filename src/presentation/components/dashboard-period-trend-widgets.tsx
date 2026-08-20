@@ -65,13 +65,9 @@ export function PeriodIncomeBehaviorChart({
         </p>
       </div>
       {trend.length === 0 ? (
-        <ChartEmptyState>
-          No hay movimientos hasta la fecha de corte de este período.
-        </ChartEmptyState>
+        <ChartEmptyState>No hay movimientos en este período.</ChartEmptyState>
       ) : visibleGroups.length === 0 ? (
-        <ChartEmptyState>
-          No hay ingresos en el alcance seleccionado hasta la fecha de corte.
-        </ChartEmptyState>
+        <ChartEmptyState>No hay ingresos para el alcance seleccionado.</ChartEmptyState>
       ) : (
         <>
           <DailyChartViewport ariaLabel="Gráfico desplazable del ritmo acumulado de ingresos">
@@ -193,13 +189,9 @@ export function PeriodFinancialTrendChart({
         </p>
       </div>
       {trend.length === 0 ? (
-        <ChartEmptyState>
-          No hay movimientos hasta la fecha de corte de este período.
-        </ChartEmptyState>
+        <ChartEmptyState>No hay movimientos en este período.</ChartEmptyState>
       ) : !hasFinancialMovement ? (
-        <ChartEmptyState>
-          No hay ingresos en el alcance seleccionado ni egresos hasta la fecha de corte.
-        </ChartEmptyState>
+        <ChartEmptyState>No hay ingresos para el alcance seleccionado ni egresos.</ChartEmptyState>
       ) : (
         <>
           <DailyChartViewport ariaLabel="Gráfico desplazable de ingresos y egresos diarios">
