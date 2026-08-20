@@ -78,6 +78,8 @@ interface AuthProviderProps {
   services: AppServices;
 }
 
+type SilentAttemptStatus = "idle" | "in-flight" | "done";
+
 export function AuthProvider({ children, clientId, dataSource, services }: AuthProviderProps) {
   const [initialSession] = useState<StoredAuthSession | null>(() => readAuthSession(clientId));
   const [state, setState] = useState<AuthState>(() =>
@@ -87,6 +89,7 @@ export function AuthProvider({ children, clientId, dataSource, services }: AuthP
   const tokenClientRef = useRef<GoogleTokenClient | null>(null);
   const preparationAttemptRef = useRef(0);
   const restoredSessionRef = useRef<StoredAuthSession | null>(initialSession);
+  const silentAttemptRef = useRef<SilentAttemptStatus>("idle");
   const isAuthenticatedRef = useRef(false);
   const expirationTimerRef = useRef<number | null>(null);
 
@@ -141,10 +144,21 @@ export function AuthProvider({ children, clientId, dataSource, services }: AuthP
     [clearActiveSession],
   );
 
+  const settleSilentAttempt = useCallback(() => {
+    silentAttemptRef.current = "done";
+    setState((current) => (current.status === "preparing" ? { status: "ready" } : current));
+  }, []);
+
   const handleTokenResponse = useCallback(
     (response: GoogleTokenResponse) => {
+      const wasSilentAttempt = silentAttemptRef.current === "in-flight";
+      if (wasSilentAttempt) silentAttemptRef.current = "done";
       const accessToken = response.access_token;
       if (!accessToken) {
+        if (wasSilentAttempt) {
+          settleSilentAttempt();
+          return;
+        }
         handleAuthorizationError(
           response.error_description ?? response.error ?? "Google no autorizó la sesión.",
         );
@@ -172,11 +186,16 @@ export function AuthProvider({ children, clientId, dataSource, services }: AuthP
       completeAuthentication,
       dataSource.allowedEmails,
       handleAuthorizationError,
+      settleSilentAttempt,
     ],
   );
 
   const handlePopupError = useCallback(
     (error: GoogleTokenClientError) => {
+      if (silentAttemptRef.current === "in-flight") {
+        settleSilentAttempt();
+        return;
+      }
       if (error.type === "popup_failed_to_open") {
         handleAuthorizationError(
           "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes para este sitio y vuelve a intentarlo.",
@@ -191,7 +210,7 @@ export function AuthProvider({ children, clientId, dataSource, services }: AuthP
       }
       handleAuthorizationError("No se pudo abrir la ventana de Google. Vuelve a intentarlo.");
     },
-    [handleAuthorizationError],
+    [handleAuthorizationError, settleSilentAttempt],
   );
 
   useEffect(() => {
@@ -235,9 +254,17 @@ export function AuthProvider({ children, clientId, dataSource, services }: AuthP
         });
         if (preparationAttemptRef.current !== attempt) return;
         tokenClientRef.current = tokenClient;
-        if (!restoredSessionRef.current && !isAuthenticatedRef.current) {
-          setState((current) => (current.status === "preparing" ? { status: "ready" } : current));
+        if (restoredSessionRef.current || isAuthenticatedRef.current) return;
+        if (silentAttemptRef.current === "idle") {
+          silentAttemptRef.current = "in-flight";
+          try {
+            tokenClient.requestAccessToken({ prompt: "none" });
+          } catch {
+            settleSilentAttempt();
+          }
+          return;
         }
+        if (silentAttemptRef.current === "done") settleSilentAttempt();
       } catch (error: unknown) {
         if (preparationAttemptRef.current !== attempt || isAuthenticatedRef.current) return;
         setState({
@@ -252,7 +279,7 @@ export function AuthProvider({ children, clientId, dataSource, services }: AuthP
       preparationAttemptRef.current += 1;
       tokenClientRef.current = null;
     };
-  }, [clientId, handlePopupError, handleTokenResponse, preparationVersion]);
+  }, [clientId, handlePopupError, handleTokenResponse, preparationVersion, settleSilentAttempt]);
 
   useEffect(() => clearExpirationTimer, [clearExpirationTimer]);
 

@@ -67,6 +67,8 @@ commit del build en las pantallas de acceso y navegación.
 6. La aplicación solicita el scope `https://www.googleapis.com/auth/spreadsheets`. Los usuarios deberán volver a consentir después de migrar desde el scope de solo lectura.
 7. Comparta el Sheet con cada usuario autorizado como Editor para habilitar el CRUD. Ese permiso es la barrera de acceso real; la allowlist de la aplicación solo evita intentos innecesarios.
 
+Al cargar la app se intenta una autorización silenciosa: si el usuario ya autorizó la aplicación, mantiene una sesión activa de Google en el navegador y concedió el scope de Sheets, entra directamente sin pulsar el botón. Si Google no puede completarla sin interacción (primera vez, sesión cerrada o permisos revocados), se muestra el ingreso manual con consentimiento.
+
 ## Variables de entorno
 
 Todos los valores `VITE_*` son visibles desde el navegador y no son secretos. Nunca agregue contraseñas, cookies, access tokens, service-account JSON ni client secrets.

@@ -61,8 +61,10 @@ const renderAuthProvider = () => {
 };
 
 const expectPrepared = async () => {
-  await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+  await waitFor(() => expect(requestAccessToken).toHaveBeenCalledWith({ prompt: "none" }));
   if (!tokenCallback) throw new Error("No se inicializó el cliente de token de Google.");
+  tokenCallback({ error: "login_required" });
+  await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
   return tokenCallback;
 };
 
@@ -83,13 +85,63 @@ afterEach(() => {
 });
 
 describe("AuthProvider", () => {
-  it("prepara GIS al montar sin iniciar una autorización automática", async () => {
+  it("intenta una autorización silenciosa al montar sin pedir consentimiento", async () => {
+    setGoogleIdentity();
+    renderAuthProvider();
+
+    await waitFor(() => expect(requestAccessToken).toHaveBeenCalledWith({ prompt: "none" }));
+    expect(screen.getByTestId("status")).toHaveTextContent("preparing");
+  });
+
+  it("entra sin interacción cuando la autorización silenciosa tiene éxito", async () => {
+    setGoogleIdentity();
+    const fetchMock = vi.fn<typeof fetch>();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ email: "tesorero@iglesia.org", name: "Tesorería" }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const services = renderAuthProvider();
+
+    await waitFor(() => expect(requestAccessToken).toHaveBeenCalledWith({ prompt: "none" }));
+    tokenCallback?.({ access_token: "token-silencioso", expires_in: 3_600 });
+
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("authenticated"));
+    expect(requestAccessToken).toHaveBeenCalledTimes(1);
+    expect(services.tokenStore.get()).toBe("token-silencioso");
+  });
+
+  it("deja el ingreso manual disponible cuando la autorización silenciosa no puede continuar", async () => {
     setGoogleIdentity();
     renderAuthProvider();
 
     await expectPrepared();
 
-    expect(requestAccessToken).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ingresar" })).toBeEnabled();
+  });
+
+  it("no repite la autorización silenciosa tras reintentar la preparación", async () => {
+    setGoogleIdentity();
+    renderAuthProvider();
+
+    await expectPrepared();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    expect(requestAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("deja el ingreso manual disponible si la ventana silenciosa no puede abrirse", async () => {
+    setGoogleIdentity();
+    renderAuthProvider();
+
+    await waitFor(() => expect(requestAccessToken).toHaveBeenCalledWith({ prompt: "none" }));
+    popupErrorCallback?.({ type: "popup_failed_to_open" });
+
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("solicita el token inmediatamente al pulsar Ingresar", async () => {
@@ -99,8 +151,8 @@ describe("AuthProvider", () => {
     await expectPrepared();
     fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
 
-    expect(requestAccessToken).toHaveBeenCalledTimes(1);
-    expect(requestAccessToken).toHaveBeenCalledWith({ prompt: "consent" });
+    expect(requestAccessToken).toHaveBeenCalledTimes(2);
+    expect(requestAccessToken).toHaveBeenLastCalledWith({ prompt: "consent" });
     expect(screen.getByTestId("status")).toHaveTextContent("authorizing");
   });
 
@@ -222,10 +274,15 @@ describe("AuthProvider", () => {
       await act(async () => {
         await vi.runAllTicks();
       });
-      if (!tokenCallback) throw new Error("No se inicializó el cliente de token de Google.");
-      fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
-      tokenCallback({ access_token: "token-corto", expires_in: 61 });
+      const callback = tokenCallback;
+      if (!callback) throw new Error("No se inicializó el cliente de token de Google.");
       await act(async () => {
+        callback({ error: "login_required" });
+        await vi.runAllTicks();
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+      await act(async () => {
+        callback({ access_token: "token-corto", expires_in: 61 });
         await vi.runAllTicks();
       });
       expect(screen.getByTestId("status")).toHaveTextContent("authenticated");
