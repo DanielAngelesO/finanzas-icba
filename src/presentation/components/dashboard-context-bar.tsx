@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DashboardIncomeScope } from "../../domain/dashboard";
 import { formatPeriod } from "../formatters";
 import { IncomeScopeToggle } from "./dashboard-income-scope-toggle";
@@ -99,22 +100,19 @@ export function DashboardContextBar({
           Actualizando…
         </p>
       ) : null}
-      {isFloating ? (
-        <section aria-label="Filtros del resumen" className="dashboard-floating-bar">
-          <PeriodSelect
-            ariaLabel="Período"
-            availablePeriods={availablePeriods}
-            className="dashboard-floating-period"
-            onPeriodChange={onPeriodChange}
-            selectedPeriod={selectedPeriod}
-          />
-          <IncomeScopeToggle
-            label="Filtrar por solo aportes: diezmos y ofrendas"
-            onChange={onScopeChange}
-            scope={scope}
-          />
-        </section>
-      ) : null}
+      {isFloating
+        ? createPortal(
+            <section aria-label="Alcance del resumen" className="dashboard-floating-bar">
+              <IncomeScopeToggle
+                label="Filtrar por solo aportes: diezmos y ofrendas"
+                onChange={onScopeChange}
+                scope={scope}
+                variant="compact"
+              />
+            </section>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

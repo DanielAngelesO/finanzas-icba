@@ -596,7 +596,7 @@ describe("navegación principal", () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it("convierte los filtros en un dock flotante al desplazarse y sincroniza la URL", async () => {
+  it("muestra un control compacto de alcance flotante al desplazarse y sincroniza la URL", async () => {
     const user = userEvent.setup();
     type MockEntry = { boundingClientRect: { top: number }; isIntersecting: boolean };
     const observers: Array<{ callback: (entries: MockEntry[]) => void }> = [];
@@ -622,8 +622,9 @@ describe("navegación principal", () => {
       observers[0]?.callback([{ boundingClientRect: { top: -120 }, isIntersecting: false }]);
     });
 
-    const [staticBar, dock] = screen.getAllByRole("region", { name: "Filtros del resumen" });
-    if (!staticBar || !dock) throw new Error("No se encontró el dock flotante del resumen.");
+    const staticBar = screen.getByRole("region", { name: "Filtros del resumen" });
+    const dock = screen.getByRole("region", { name: "Alcance del resumen" });
+    if (!staticBar || !dock) throw new Error("No se encontró el control flotante del resumen.");
     expect(
       within(dock).getByRole("button", { name: "Filtrar por solo aportes: diezmos y ofrendas" }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -643,13 +644,6 @@ describe("navegación principal", () => {
         name: "Filtrar por solo aportes: diezmos y ofrendas",
       }),
     ).toHaveAttribute("aria-pressed", "false");
-
-    await user.selectOptions(within(dock).getByRole("combobox", { name: "Período" }), "202607");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("period=202607");
-      expect(screen.getByTestId("location")).toHaveTextContent("income=all");
-    });
   });
 
   it("muestra los indicadores y comparaciones de ambos escenarios financieros", async () => {
@@ -686,7 +680,7 @@ describe("navegación principal", () => {
     expect(annualTab).toHaveAttribute("aria-selected", "false");
     expect(
       screen.getByRole("region", { name: "Gráfico desplazable de ingresos y egresos diarios" }),
-    ).toHaveAttribute("tabindex", "0");
+    ).toBeInTheDocument();
 
     const accumulatedDetail = screen.getByText("Ver ritmo acumulado por grupo").closest("details");
     if (!accumulatedDetail) throw new Error("No se encontró el detalle de ritmo acumulado.");

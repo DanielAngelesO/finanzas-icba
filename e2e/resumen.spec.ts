@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Resumen móvil", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("muestra un dock de filtros flotante al desplazarse y sincroniza la URL", async ({
+  test("muestra un control compacto de alcance flotante al desplazarse y sincroniza la URL", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -15,7 +15,6 @@ test.describe("Resumen móvil", () => {
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await expect(dock).toBeVisible();
-    await expect(page.locator(".dashboard-floating-period")).toBeVisible();
 
     const scopeToggle = dock.getByRole("button", {
       name: "Filtrar por solo aportes: diezmos y ofrendas",
@@ -24,10 +23,6 @@ test.describe("Resumen móvil", () => {
     await scopeToggle.click();
     await expect(page).toHaveURL(/income=all/);
     await expect(scopeToggle).toHaveAttribute("aria-pressed", "false");
-
-    await dock.getByRole("combobox", { name: "Período" }).selectOption("202607");
-    await expect(page).toHaveURL(/period=202607/);
-    await expect(page).toHaveURL(/income=all/);
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect(dock).toBeHidden();

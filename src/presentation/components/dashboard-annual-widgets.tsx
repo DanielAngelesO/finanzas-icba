@@ -15,7 +15,7 @@ import type {
 } from "../../domain/dashboard";
 import { incomeGroupDetails, getIncomeScopeLabel } from "../dashboard-income-presentation";
 import { formatCompactMoney, formatMoney, formatPeriod } from "../formatters";
-import { ChartEmptyState } from "./dashboard-chart-support";
+import { ChartEmptyState, ChartScrollArea } from "./dashboard-chart-support";
 import { formatChartPeriod, tooltipStyle } from "./dashboard-chart-utils";
 
 const incomeGroups = [
@@ -43,65 +43,57 @@ export function IncomeGroupCompositionTrendChart({ trend }: { trend: DashboardTr
         <ChartEmptyState>No se registraron ingresos en los últimos doce meses.</ChartEmptyState>
       ) : (
         <>
-          <div
-            className="chart-scroll mt-5"
-            role="region"
-            aria-label="Gráfico desplazable de composición mensual de ingresos"
-            tabIndex={0}
+          <ChartScrollArea
+            ariaLabel="Gráfico desplazable de composición mensual de ingresos"
+            hintNoun="todos los meses"
+            minWidth={trend.length * 20}
           >
-            <div className="h-72 min-w-[44rem] sm:h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  accessibilityLayer
-                  data={trend}
-                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    stroke="var(--ui-chart-grid)"
-                    strokeDasharray="3 3"
-                    vertical={false}
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                accessibilityLayer
+                data={trend}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
+                  tickFormatter={formatChartPeriod}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={20}
+                />
+                <YAxis
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
+                  tickFormatter={formatCompactMoney}
+                  tickLine={false}
+                  axisLine={false}
+                  width={68}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  cursor={{ fill: "var(--ui-chart-cursor)" }}
+                  formatter={(value) => formatMoney(Number(value))}
+                  labelFormatter={(label) => formatPeriod(String(label))}
+                />
+                <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
+                {incomeGroups.map((group) => (
+                  <Bar
+                    dataKey={"incomeByGroup." + group + ".amount"}
+                    fill={incomeGroupDetails[group].color}
+                    isAnimationActive={false}
+                    key={group}
+                    name={incomeGroupDetails[group].label}
+                    stackId="income"
                   />
-                  <XAxis
-                    dataKey="period"
-                    tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                    tickFormatter={formatChartPeriod}
-                    tickLine={false}
-                    axisLine={false}
-                    minTickGap={20}
-                  />
-                  <YAxis
-                    tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                    tickFormatter={formatCompactMoney}
-                    tickLine={false}
-                    axisLine={false}
-                    width={68}
-                  />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    cursor={{ fill: "var(--ui-chart-cursor)" }}
-                    formatter={(value) => formatMoney(Number(value))}
-                    labelFormatter={(label) => formatPeriod(String(label))}
-                  />
-                  <Legend
-                    wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }}
-                  />
-                  {incomeGroups.map((group) => (
-                    <Bar
-                      dataKey={"incomeByGroup." + group + ".amount"}
-                      fill={incomeGroupDetails[group].color}
-                      isAnimationActive={false}
-                      key={group}
-                      name={incomeGroupDetails[group].label}
-                      stackId="income"
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-slate-500 sm:hidden" aria-hidden="true">
-            Desliza el gráfico horizontalmente para recorrer todos los meses.
-          </p>
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartScrollArea>
           <figcaption className="sr-only">
             Composición mensual de diezmos, ofrendas y otros ingresos.
           </figcaption>
@@ -167,69 +159,61 @@ export function FinancialTrendChart({
         <ChartEmptyState>No hay movimientos financieros en los últimos doce meses.</ChartEmptyState>
       ) : (
         <>
-          <div
-            className="chart-scroll mt-5"
-            role="region"
-            aria-label="Gráfico desplazable de ingresos y egresos mensuales"
-            tabIndex={0}
+          <ChartScrollArea
+            ariaLabel="Gráfico desplazable de ingresos y egresos mensuales"
+            hintNoun="todos los meses"
+            minWidth={trend.length * 20}
           >
-            <div className="h-72 min-w-[44rem] sm:h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  accessibilityLayer
-                  data={trend}
-                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    stroke="var(--ui-chart-grid)"
-                    strokeDasharray="3 3"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="period"
-                    tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                    tickFormatter={formatChartPeriod}
-                    tickLine={false}
-                    axisLine={false}
-                    minTickGap={20}
-                  />
-                  <YAxis
-                    tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
-                    tickFormatter={formatCompactMoney}
-                    tickLine={false}
-                    axisLine={false}
-                    width={68}
-                  />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    cursor={{ fill: "var(--ui-chart-cursor)" }}
-                    formatter={(value) => formatMoney(Number(value))}
-                    labelFormatter={(label) => formatPeriod(String(label))}
-                  />
-                  <Legend
-                    wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }}
-                  />
-                  <Bar
-                    dataKey={"income." + scope}
-                    name="Ingresos"
-                    fill="var(--ui-chart-1)"
-                    radius={[5, 5, 0, 0]}
-                    isAnimationActive={false}
-                  />
-                  <Bar
-                    dataKey="expense"
-                    name="Egresos"
-                    fill="var(--ui-danger)"
-                    radius={[5, 5, 0, 0]}
-                    isAnimationActive={false}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-slate-500 sm:hidden" aria-hidden="true">
-            Desliza el gráfico horizontalmente para recorrer todos los meses.
-          </p>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                accessibilityLayer
+                data={trend}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="var(--ui-chart-grid)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
+                  tickFormatter={formatChartPeriod}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={20}
+                />
+                <YAxis
+                  tick={{ fill: "var(--ui-chart-text)", fontSize: 12 }}
+                  tickFormatter={formatCompactMoney}
+                  tickLine={false}
+                  axisLine={false}
+                  width={68}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  cursor={{ fill: "var(--ui-chart-cursor)" }}
+                  formatter={(value) => formatMoney(Number(value))}
+                  labelFormatter={(label) => formatPeriod(String(label))}
+                />
+                <Legend wrapperStyle={{ color: "var(--ui-text-secondary)", fontSize: "0.75rem" }} />
+                <Bar
+                  dataKey={"income." + scope}
+                  name="Ingresos"
+                  fill="var(--ui-chart-1)"
+                  radius={[5, 5, 0, 0]}
+                  isAnimationActive={false}
+                />
+                <Bar
+                  dataKey="expense"
+                  name="Egresos"
+                  fill="var(--ui-danger)"
+                  radius={[5, 5, 0, 0]}
+                  isAnimationActive={false}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartScrollArea>
           <figcaption className="sr-only">
             Comparación de {incomeLabel.toLocaleLowerCase("es-PE")} y egresos para los últimos doce
             meses.

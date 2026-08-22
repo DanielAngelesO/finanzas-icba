@@ -11,7 +11,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { ReactNode } from "react";
 import type {
   DashboardDailyTrendPoint,
   DashboardIncomeBehaviorPoint,
@@ -20,26 +19,13 @@ import type {
 } from "../../domain/dashboard";
 import { getIncomeScopeLabel, incomeGroupDetails } from "../dashboard-income-presentation";
 import { formatCompactMoney, formatMoney, formatPercent } from "../formatters";
-import { ChartEmptyState } from "./dashboard-chart-support";
+import { ChartEmptyState, ChartScrollArea } from "./dashboard-chart-support";
 import { formatChartDate, formatChartDay, tooltipStyle } from "./dashboard-chart-utils";
 
 const incomeGroupsByScope = {
   CONTRIBUTIONS: ["DIEZMOS", "OFRENDAS"],
   ALL: ["DIEZMOS", "OFRENDAS", "OTROS"],
 } as const satisfies Record<DashboardIncomeScope, readonly DashboardIncomeGroup[]>;
-
-function DailyChartViewport({ ariaLabel, children }: { ariaLabel: string; children: ReactNode }) {
-  return (
-    <>
-      <div className="chart-scroll mt-5" role="region" aria-label={ariaLabel} tabIndex={0}>
-        <div className="h-72 min-w-[44rem] sm:h-80">{children}</div>
-      </div>
-      <p className="mt-3 text-xs text-slate-500 sm:hidden" aria-hidden="true">
-        Desliza el gráfico horizontalmente para recorrer todos los días.
-      </p>
-    </>
-  );
-}
 
 export function PeriodIncomeBehaviorChart({
   trend,
@@ -70,7 +56,11 @@ export function PeriodIncomeBehaviorChart({
         <ChartEmptyState>No hay ingresos para el alcance seleccionado.</ChartEmptyState>
       ) : (
         <>
-          <DailyChartViewport ariaLabel="Gráfico desplazable del ritmo acumulado de ingresos">
+          <ChartScrollArea
+            ariaLabel="Gráfico desplazable del ritmo acumulado de ingresos"
+            hintNoun="todos los días"
+            minWidth={trend.length * 8}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 accessibilityLayer
@@ -124,7 +114,7 @@ export function PeriodIncomeBehaviorChart({
                 })}
               </LineChart>
             </ResponsiveContainer>
-          </DailyChartViewport>
+          </ChartScrollArea>
           <figcaption className="sr-only">
             Ritmo acumulado de {getIncomeScopeLabel(scope).toLocaleLowerCase("es-PE")} por día del
             período.
@@ -194,7 +184,11 @@ export function PeriodFinancialTrendChart({
         <ChartEmptyState>No hay ingresos para el alcance seleccionado ni egresos.</ChartEmptyState>
       ) : (
         <>
-          <DailyChartViewport ariaLabel="Gráfico desplazable de ingresos y egresos diarios">
+          <ChartScrollArea
+            ariaLabel="Gráfico desplazable de ingresos y egresos diarios"
+            hintNoun="todos los días"
+            minWidth={chartData.length * 8}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 accessibilityLayer
@@ -245,7 +239,7 @@ export function PeriodFinancialTrendChart({
                 />
               </BarChart>
             </ResponsiveContainer>
-          </DailyChartViewport>
+          </ChartScrollArea>
           <figcaption className="sr-only">
             Comparación diaria de {getIncomeScopeLabel(scope).toLocaleLowerCase("es-PE")} y egresos
             del período seleccionado.

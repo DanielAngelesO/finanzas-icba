@@ -17,22 +17,24 @@ export function IncomeScopeToggle({
   scope,
   onChange,
   label,
+  variant = "default",
 }: {
   scope: DashboardIncomeScope;
   onChange: (scope: DashboardIncomeScope) => void;
   label: string;
+  variant?: "default" | "compact";
 }) {
   return (
     <button
       aria-label={label}
       aria-pressed={scope === "CONTRIBUTIONS"}
-      className="scope-toggle"
+      className={variant === "compact" ? "scope-toggle scope-toggle--compact" : "scope-toggle"}
       onClick={() => onChange(scope === "CONTRIBUTIONS" ? "ALL" : "CONTRIBUTIONS")}
       title="Mostrar solo diezmos y ofrendas"
       type="button"
     >
       <ContributionsIcon />
-      <span>Solo aportes</span>
+      {variant !== "compact" ? <span>Solo aportes</span> : null}
     </button>
   );
 }
