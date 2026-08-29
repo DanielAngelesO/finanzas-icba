@@ -9,8 +9,15 @@ import {
   type TransactionType,
 } from "../../../domain/transaction";
 import { CatalogPicker } from "./catalog-picker";
+import {
+  isCashAccount,
+  isOfferingCategory,
+  resolveDefaultAccount,
+  resolveDefaultPaymentMethod,
+  resolveMembershipDonor,
+} from "./transaction-defaults";
 import { getTransactionMutationError } from "./transaction-errors";
-import { CurrencyInput, TransactionTypeControl } from "./transaction-form-controls";
+import { CurrencyInput, LockedField, TransactionTypeControl } from "./transaction-form-controls";
 import {
   getDraftFinancialSummary,
   getLimaToday,
@@ -108,7 +115,9 @@ const getDefaultState = (
       destinationAccount: null,
       category: selection(catalogs.categories, transaction.category),
       subcategory: selection(catalogs.subcategories, transaction.subcategory),
-      paymentMethod: selection(catalogs.paymentMethods, transaction.paymentMethod),
+      paymentMethod: isCashAccount(transaction.account)
+        ? resolveDefaultPaymentMethod(catalogs.paymentMethods, transaction.account)
+        : selection(catalogs.paymentMethods, transaction.paymentMethod),
       thirdParty: clearsVariableData
         ? null
         : selection(catalogs.thirdParties, transaction.donorOrProvider),
@@ -120,28 +129,29 @@ const getDefaultState = (
 
   const remembered = rememberedSelections.get(rememberedKey(actor, initialType));
   const categories = getAllowedCategories(catalogs, initialType);
-  const defaultAccount = activeFirst(catalogs.accounts);
   const defaultCategory = activeFirst(categories);
-  const defaultPayment = activeFirst(catalogs.paymentMethods);
+  const account = remembered?.account ?? resolveDefaultAccount(catalogs.accounts, initialType);
+  const category =
+    remembered?.category ??
+    (defaultCategory ? { id: defaultCategory.id, name: defaultCategory.name } : null);
+  const paymentMethod =
+    isCashAccount(account?.name) || !remembered?.paymentMethod
+      ? resolveDefaultPaymentMethod(catalogs.paymentMethods, account?.name)
+      : remembered.paymentMethod;
   return {
     type: initialType,
     amount: "",
     date,
-    account:
-      remembered?.account ??
-      (defaultAccount ? { id: defaultAccount.id, name: defaultAccount.name } : null),
+    account,
     originAccount:
-      remembered?.originAccount ??
-      (defaultAccount ? { id: defaultAccount.id, name: defaultAccount.name } : null),
+      remembered?.originAccount ?? resolveDefaultAccount(catalogs.accounts, initialType),
     destinationAccount: remembered?.destinationAccount ?? null,
-    category:
-      remembered?.category ??
-      (defaultCategory ? { id: defaultCategory.id, name: defaultCategory.name } : null),
+    category,
     subcategory: remembered?.subcategory ?? null,
-    paymentMethod:
-      remembered?.paymentMethod ??
-      (defaultPayment ? { id: defaultPayment.id, name: defaultPayment.name } : null),
-    thirdParty: null,
+    paymentMethod,
+    thirdParty: isOfferingCategory(category?.name)
+      ? resolveMembershipDonor(catalogs.thirdParties)
+      : null,
     description: "",
     referenceOrReceipt: "",
     notes: "",
@@ -211,21 +221,52 @@ export function TransactionEditorSheet({
     if (!pendingDraft && dialog.open) dialog.close();
   }, [financialChanges.length, pendingDraft]);
 
+  // Caja Chica siempre paga en efectivo (ver getDefaultState y changeAccount/changeType).
+  const cashLocksPayment =
+    form.type !== "TRANSFERENCIA" && isCashAccount(form.account?.name);
+
   const requestClose = () => {
     if (saving) return;
     if (dirty && !window.confirm("Hay cambios sin guardar. ¿Quieres cerrar el editor?")) return;
     onClose();
   };
 
-  const setField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
-    setForm((current) => ({ ...current, [field]: value }));
+  const clearFieldErrors = (fields: Array<keyof FormState>) => {
     setErrors((current) => {
       const next = { ...current };
-      delete next[field];
+      for (const field of fields) delete next[field];
       delete next.form;
       return next;
     });
     setSaveError(null);
+  };
+
+  const setField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    clearFieldErrors([field]);
+  };
+
+  const patch = (updates: Partial<FormState>) => {
+    setForm((current) => ({ ...current, ...updates }));
+    clearFieldErrors(Object.keys(updates) as Array<keyof FormState>);
+  };
+
+  const changeAccount = (value: CatalogSelection | null) => {
+    const wasCash = isCashAccount(form.account?.name);
+    const nowCash = isCashAccount(value?.name);
+    const paymentMethod =
+      nowCash || wasCash || !form.paymentMethod
+        ? resolveDefaultPaymentMethod(catalogs.paymentMethods, value?.name)
+        : form.paymentMethod;
+    patch({ account: value, paymentMethod });
+  };
+
+  const changeCategory = (value: CatalogSelection | null) => {
+    const updates: Partial<FormState> = { category: value, subcategory: null };
+    if (isOfferingCategory(value?.name) && !form.thirdParty) {
+      updates.thirdParty = resolveMembershipDonor(catalogs.thirdParties);
+    }
+    patch(updates);
   };
 
   const changeType = (type: TransactionType) => {
@@ -240,31 +281,41 @@ export function TransactionEditorSheet({
           (type === "EGRESO" && party.role === "PROVEEDOR")),
     );
     const firstCategory = activeFirst(categories);
-    setForm((current) => ({
-      ...current,
-      type,
-      account:
+    setForm((current) => {
+      const nextAccount =
         type === "TRANSFERENCIA"
           ? null
-          : (current.account ??
-            current.originAccount ??
-            rememberedSelections.get(rememberedKey(actor, type))?.account ??
-            null),
-      originAccount: type === "TRANSFERENCIA" ? (current.originAccount ?? current.account) : null,
-      destinationAccount: type === "TRANSFERENCIA" ? current.destinationAccount : null,
-      category:
+          : (rememberedSelections.get(rememberedKey(actor, type))?.account ??
+            resolveDefaultAccount(catalogs.accounts, type));
+      const nextCategory =
         type === "TRANSFERENCIA"
           ? null
           : categoryAllowed
             ? current.category
             : firstCategory
               ? { id: firstCategory.id, name: firstCategory.name }
-              : null,
-      subcategory: type === "TRANSFERENCIA" || !categoryAllowed ? null : current.subcategory,
-      paymentMethod: type === "TRANSFERENCIA" ? null : current.paymentMethod,
-      thirdParty: type === "TRANSFERENCIA" || !partyAllowed ? null : current.thirdParty,
-      referenceOrReceipt: type === "EGRESO" ? current.referenceOrReceipt : "",
-    }));
+              : null;
+      const keptParty = type === "TRANSFERENCIA" || !partyAllowed ? null : current.thirdParty;
+      return {
+        ...current,
+        type,
+        account: nextAccount,
+        originAccount:
+          type === "TRANSFERENCIA" ? (current.originAccount ?? current.account) : null,
+        destinationAccount: type === "TRANSFERENCIA" ? current.destinationAccount : null,
+        category: nextCategory,
+        subcategory: type === "TRANSFERENCIA" || !categoryAllowed ? null : current.subcategory,
+        paymentMethod:
+          type === "TRANSFERENCIA"
+            ? null
+            : resolveDefaultPaymentMethod(catalogs.paymentMethods, nextAccount?.name),
+        thirdParty:
+          type !== "TRANSFERENCIA" && isOfferingCategory(nextCategory?.name) && !keptParty
+            ? resolveMembershipDonor(catalogs.thirdParties)
+            : keptParty,
+        referenceOrReceipt: type === "EGRESO" ? current.referenceOrReceipt : "",
+      };
+    });
     setErrors({});
   };
 
@@ -411,18 +462,10 @@ export function TransactionEditorSheet({
         }}
       >
         <form className="transaction-editor-content" ref={formRef} onSubmit={submit} noValidate>
-          <header className="transaction-sheet-header">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-                Transacción
-              </p>
-              <h2
-                className="mt-1 text-lg font-semibold text-slate-100"
-                id="transaction-editor-title"
-              >
-                {title}
-              </h2>
-            </div>
+          <header className="transaction-sheet-header transaction-editor-header">
+            <h2 className="transaction-editor-title" id="transaction-editor-title">
+              {title}
+            </h2>
             <button
               className="transaction-icon-button"
               type="button"
@@ -434,11 +477,15 @@ export function TransactionEditorSheet({
             </button>
           </header>
 
+          <div className="transaction-editor-type">
+            <TransactionTypeControl value={form.type} onChange={changeType} />
+          </div>
+
           <div className="transaction-editor-body">
             {Object.keys(errors).length > 0 ? (
-              <div className="transaction-validation-summary" role="alert" tabIndex={-1}>
-                <p>Revisa los campos indicados antes de guardar.</p>
-              </div>
+              <p className="transaction-validation-summary" role="alert" tabIndex={-1}>
+                Revisa los campos indicados antes de guardar.
+              </p>
             ) : null}
             {saveError ? (
               <div className="alert-error" role="alert">
@@ -446,9 +493,7 @@ export function TransactionEditorSheet({
               </div>
             ) : null}
 
-            <TransactionTypeControl value={form.type} onChange={changeType} />
-
-            <div className="transaction-form-grid transaction-form-grid-primary">
+            <div className="transaction-editor-amount-row">
               <CurrencyInput
                 value={form.amount}
                 onChange={(value) => setField("amount", value)}
@@ -511,21 +556,10 @@ export function TransactionEditorSheet({
             ) : (
               <div className="transaction-dynamic-fields">
                 <CatalogPicker
-                  label="Cuenta"
-                  value={form.account}
-                  options={catalogs.accounts}
-                  onChange={(value) => setField("account", value)}
-                  required
-                  error={errors.account}
-                />
-                <CatalogPicker
                   label="Categoría"
                   value={form.category}
                   options={allowedCategories}
-                  onChange={(value) => {
-                    setField("category", value);
-                    setField("subcategory", null);
-                  }}
+                  onChange={changeCategory}
                   required
                   error={errors.category}
                 />
@@ -541,13 +575,29 @@ export function TransactionEditorSheet({
                   </div>
                 ) : null}
                 <CatalogPicker
-                  label="Método de pago"
-                  value={form.paymentMethod}
-                  options={catalogs.paymentMethods}
-                  onChange={(value) => setField("paymentMethod", value)}
+                  label="Cuenta"
+                  value={form.account}
+                  options={catalogs.accounts}
+                  onChange={changeAccount}
                   required
-                  error={errors.paymentMethod}
+                  error={errors.account}
                 />
+                {cashLocksPayment ? (
+                  <LockedField
+                    label="Tipo de pago"
+                    value={form.paymentMethod?.name ?? "Efectivo"}
+                    hint="Caja Chica siempre paga en efectivo."
+                  />
+                ) : (
+                  <CatalogPicker
+                    label="Tipo de pago"
+                    value={form.paymentMethod}
+                    options={catalogs.paymentMethods}
+                    onChange={(value) => setField("paymentMethod", value)}
+                    required
+                    error={errors.paymentMethod}
+                  />
+                )}
                 <CatalogPicker
                   label={form.type === "INGRESO" ? "Donante" : "Proveedor"}
                   value={form.thirdParty}
@@ -589,16 +639,14 @@ export function TransactionEditorSheet({
             </div>
 
             <details className="transaction-more-details">
-              <summary>Más detalles</summary>
-              <label className="field-label mt-4">
-                Notas
-                <textarea
-                  className="field min-h-24 resize-y"
-                  value={form.notes}
-                  onChange={(event) => setField("notes", event.target.value)}
-                  placeholder="Información adicional opcional"
-                />
-              </label>
+              <summary>Notas</summary>
+              <textarea
+                className="field min-h-24 mt-3 resize-y"
+                aria-label="Notas"
+                value={form.notes}
+                onChange={(event) => setField("notes", event.target.value)}
+                placeholder="Información adicional opcional"
+              />
             </details>
           </div>
 

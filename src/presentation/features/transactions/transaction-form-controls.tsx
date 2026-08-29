@@ -45,6 +45,27 @@ export function TransactionTypeControl({
   );
 }
 
+export function LockedField({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="transaction-locked-field">
+      <span className="transaction-field-label-text">{label}</span>
+      <span className="transaction-locked-value">
+        <span>{value}</span>
+        <span className="transaction-locked-tag">Fijo</span>
+      </span>
+      {hint ? <span className="transaction-locked-hint">{hint}</span> : null}
+    </div>
+  );
+}
+
 export function CurrencyInput({
   value,
   onChange,
