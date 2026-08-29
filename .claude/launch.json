@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "review",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:review", "--", "--port", "5178", "--strictPort"],
+      "port": 5178,
+      "url": "http://127.0.0.1:5178"
+    }
+  ]
+}
