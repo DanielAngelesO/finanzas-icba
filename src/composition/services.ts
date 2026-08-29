@@ -2,6 +2,7 @@ import type { AppConfig } from "../config/google-sheets";
 import { DataSourceQueries } from "../application/use-cases/data-source-queries";
 import { GetDashboardOverviewUseCase } from "../application/use-cases/get-dashboard-overview";
 import { GetExpenseAnalysisUseCase } from "../application/use-cases/get-expense-analysis";
+import { GetMonthlyBalanceUseCase } from "../application/use-cases/get-monthly-balance";
 import { GetBasicFinancialSummaryUseCase } from "../application/use-cases/get-basic-financial-summary";
 import { TransactionQueries } from "../application/use-cases/transaction-queries";
 import { GoogleSheetsClient } from "../infrastructure/google-sheets/google-sheets-client";
@@ -29,6 +30,7 @@ export interface AppServices {
   financialSummary: GetBasicFinancialSummaryUseCase;
   dashboard: GetDashboardOverviewUseCase;
   expenses: GetExpenseAnalysisUseCase;
+  monthlyBalance: GetMonthlyBalanceUseCase;
 }
 
 const createServicesFromRepository = (repository: InMemoryTransactionRepository): AppServices => ({
@@ -38,6 +40,7 @@ const createServicesFromRepository = (repository: InMemoryTransactionRepository)
   financialSummary: new GetBasicFinancialSummaryUseCase(repository),
   dashboard: new GetDashboardOverviewUseCase(repository),
   expenses: new GetExpenseAnalysisUseCase(repository),
+  monthlyBalance: new GetMonthlyBalanceUseCase(repository),
 });
 
 export const createServices = (config: Extract<AppConfig, { kind: "configured" }>): AppServices => {
@@ -51,6 +54,7 @@ export const createServices = (config: Extract<AppConfig, { kind: "configured" }
     financialSummary: new GetBasicFinancialSummaryUseCase(repository),
     dashboard: new GetDashboardOverviewUseCase(repository),
     expenses: new GetExpenseAnalysisUseCase(repository),
+    monthlyBalance: new GetMonthlyBalanceUseCase(repository),
   };
 };
 

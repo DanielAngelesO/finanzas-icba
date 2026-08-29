@@ -15,7 +15,9 @@ export const normalizeCategory = (value: string): string =>
     .trim()
     .toLocaleLowerCase("es-PE");
 
-export const getIncomeGroup = (transaction: Transaction): DashboardIncomeGroup | null => {
+export const getIncomeGroup = (
+  transaction: Pick<Transaction, "type" | "category" | "subcategory">,
+): DashboardIncomeGroup | null => {
   if (transaction.type !== "INGRESO") return null;
 
   const normalizedValues = [transaction.category, transaction.subcategory]

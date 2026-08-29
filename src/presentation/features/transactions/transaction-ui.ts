@@ -1,8 +1,10 @@
+import { getIncomeGroup } from "../../../domain/income-groups";
 import type {
   LogicalTransaction,
   TransactionDraft,
   TransactionType,
 } from "../../../domain/transaction";
+import { formatPreviewDate } from "../../formatters";
 
 export const getTransactionTypeLabel = (type: TransactionType): string => {
   if (type === "INGRESO") return "Ingreso";
@@ -13,6 +15,28 @@ export const getTransactionTypeLabel = (type: TransactionType): string => {
 export const getTransactionConcept = (transaction: LogicalTransaction): string =>
   transaction.description ??
   (transaction.kind === "transfer" ? "Transferencia entre cuentas" : transaction.category);
+
+export interface TransactionPreviewParts {
+  category: string | null;
+  donor: string | null;
+  offeringDate: string | null;
+}
+
+export const getTransactionPreviewParts = (
+  transaction: LogicalTransaction,
+): TransactionPreviewParts => {
+  if (transaction.kind !== "single") {
+    return { category: null, donor: null, offeringDate: null };
+  }
+  const concept = getTransactionConcept(transaction);
+  const category = concept === transaction.category ? null : transaction.category;
+  const incomeGroup = getIncomeGroup(transaction);
+  const donor =
+    incomeGroup === "DIEZMOS" ? transaction.donorOrProvider?.trim() || null : null;
+  const offeringDate =
+    incomeGroup === "OFRENDAS" ? formatPreviewDate(transaction.date) : null;
+  return { category, donor, offeringDate };
+};
 
 export const getTransactionAccountsLabel = (transaction: LogicalTransaction): string =>
   transaction.kind === "transfer"

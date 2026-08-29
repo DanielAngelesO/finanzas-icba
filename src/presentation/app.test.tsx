@@ -7,6 +7,7 @@ import { DataSourceQueries } from "../application/use-cases/data-source-queries"
 import { GetBasicFinancialSummaryUseCase } from "../application/use-cases/get-basic-financial-summary";
 import { GetDashboardOverviewUseCase } from "../application/use-cases/get-dashboard-overview";
 import { GetExpenseAnalysisUseCase } from "../application/use-cases/get-expense-analysis";
+import { GetMonthlyBalanceUseCase } from "../application/use-cases/get-monthly-balance";
 import { TransactionQueries } from "../application/use-cases/transaction-queries";
 import { AccessTokenStore, type AppServices } from "../composition/services";
 import type { DashboardOverview } from "../domain/dashboard";
@@ -61,6 +62,7 @@ const createServices = (
     financialSummary: new GetBasicFinancialSummaryUseCase(repository),
     dashboard: new GetDashboardOverviewUseCase(repository),
     expenses: new GetExpenseAnalysisUseCase(repository),
+    monthlyBalance: new GetMonthlyBalanceUseCase(repository),
   };
 };
 
@@ -826,6 +828,19 @@ describe("navegación principal", () => {
     expect(await screen.findByRole("heading", { name: "Análisis de gastos" })).toBeInTheDocument();
   });
 
+  it("abre el balance mensual desde la navegación principal", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+    const balanceLink = await screen.findByRole("link", { name: "Balance mensual" });
+    expect(balanceLink).toHaveAttribute("href", "/balance");
+
+    await user.click(balanceLink);
+
+    expect(await screen.findByRole("heading", { name: "Balance mensual" })).toBeInTheDocument();
+  });
+
   it("ofrece recuperación cuando no se puede cargar el resumen", async () => {
     const services = createServices();
     services.dashboard = new FailingDashboardOverviewUseCase(new InMemoryTransactionRepository());
@@ -1054,15 +1069,15 @@ describe("explorador de movimientos", () => {
     );
   });
 
-  it("presenta filas densas sin exponer terceros en el listado", async () => {
+  it("presenta filas densas y expone al donante de diezmos en el preview", async () => {
     renderApp("/movimientos?period=202607", createServices(explorerTransactions));
 
     expect(
       await screen.findByRole("button", { name: /Ingreso: Aporte de julio/ }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("DIEZMOS")).not.toHaveLength(0);
-    expect(screen.queryByText("Ana Quispe")).not.toBeInTheDocument();
-    expect(screen.queryByText("Carlos Ríos")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Ana Quispe").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Carlos Ríos").length).toBeGreaterThan(0);
   });
 
   it("agrupa el listado móvil por día y mantiene categoría y cuenta como contexto", async () => {

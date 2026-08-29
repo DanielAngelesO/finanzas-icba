@@ -33,6 +33,17 @@ const previewMonthFormatter = new Intl.DateTimeFormat("es-PE", {
   timeZone: "America/Lima",
 });
 
+const ledgerDateFormatter = new Intl.DateTimeFormat("es-PE", {
+  day: "2-digit",
+  month: "2-digit",
+  timeZone: "America/Lima",
+});
+
+const plainAmountFormatter = new Intl.NumberFormat("es-PE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 const percentFormatter = new Intl.NumberFormat("es-PE", {
   style: "percent",
   maximumFractionDigits: 1,
@@ -67,6 +78,12 @@ export const formatShortPeriod = (period: string): string => {
 };
 
 export const formatCompactDate = (date: Date): string => compactDateFormatter.format(date);
+
+/** Fecha corta de libro contable: "23/08". */
+export const formatLedgerDate = (date: Date): string => ledgerDateFormatter.format(date);
+
+/** Importe sin símbolo, para columnas encabezadas con "S/". */
+export const formatAmount = (amount: number): string => plainAmountFormatter.format(amount);
 
 export const formatDate = (date: Date): string => dateFormatter.format(date);
 

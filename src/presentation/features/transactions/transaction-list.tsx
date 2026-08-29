@@ -5,6 +5,7 @@ import {
   getAmountPrefix,
   getTransactionAccountsLabel,
   getTransactionConcept,
+  getTransactionPreviewParts,
   getTransactionTypeClass,
   getTransactionTypeIcon,
   getTransactionTypeLabel,
@@ -42,6 +43,30 @@ function TypeBadge({ transaction }: { transaction: LogicalTransaction }) {
   );
 }
 
+function TransactionPreview({ transaction }: { transaction: LogicalTransaction }) {
+  const { category, donor, offeringDate } = getTransactionPreviewParts(transaction);
+  if (!category && !donor && !offeringDate) return null;
+  const preview = [category, donor].filter(Boolean).join(" · ");
+  return (
+    <div className="transaction-preview">
+      {preview ? (
+        <p className="transaction-preview-line" title={preview}>
+          {category ? <span className="transaction-preview-category">{category}</span> : null}
+          {category && donor ? (
+            <span className="transaction-preview-separator">{" · "}</span>
+          ) : null}
+          {donor ? <span className="transaction-preview-donor">{donor}</span> : null}
+        </p>
+      ) : null}
+      {offeringDate ? (
+        <p className="transaction-preview-date" title={offeringDate}>
+          {offeringDate}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function Amount({ transaction }: { transaction: LogicalTransaction }) {
   return (
     <span className={`transaction-row-amount ${getAmountClass(transaction)}`}>
@@ -68,13 +93,14 @@ export function TransactionList({
   const groups = groupByDay(transactions);
   const renderMobileRow = (transaction: LogicalTransaction, includeDate: boolean) => {
     const concept = getTransactionConcept(transaction);
+    const { category, donor, offeringDate } = getTransactionPreviewParts(transaction);
     const dateLabel = includeDate ? formatCompactDate(transaction.date) : null;
     return (
       <button
         className="transaction-mobile-row"
         type="button"
         onClick={(event) => onOpen(transaction, event.currentTarget)}
-        aria-label={`${getTransactionTypeLabel(transaction.type)}: ${concept}, ${formatMoney(transaction.amount)}${dateLabel ? `, ${dateLabel}` : ""}, ${getTransactionStatusLabel(transaction.status)}`}
+        aria-label={`${getTransactionTypeLabel(transaction.type)}: ${concept}, ${formatMoney(transaction.amount)}${dateLabel ? `, ${dateLabel}` : ""}${category ? `, ${category}` : ""}${donor ? `, ${donor}` : ""}${offeringDate ? `, ${offeringDate}` : ""}, ${getTransactionAccountsLabel(transaction)}, ${getTransactionStatusLabel(transaction.status)}`}
       >
         <span
           className={`transaction-row-icon ${getTransactionTypeClass(transaction.type)}`}
@@ -95,13 +121,25 @@ export function TransactionList({
                   <span aria-hidden="true"> · </span>
                 </>
               ) : null}
-              <span>{getTransactionAccountsLabel(transaction)}</span>
-              {transaction.kind === "single" ? (
+              {category ? (
                 <>
+                  <span>{category}</span>
                   <span aria-hidden="true"> · </span>
-                  <span>{transaction.category}</span>
                 </>
               ) : null}
+              {donor ? (
+                <>
+                  <span className="transaction-preview-donor">{donor}</span>
+                  <span aria-hidden="true"> · </span>
+                </>
+              ) : null}
+              {offeringDate ? (
+                <>
+                  <span>{offeringDate}</span>
+                  <span aria-hidden="true"> · </span>
+                </>
+              ) : null}
+              <span>{getTransactionAccountsLabel(transaction)}</span>
             </span>
             <span
               className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}${transaction.status === "CONFIRMED" ? " transaction-mobile-confirmed-status" : ""}`}
@@ -184,11 +222,7 @@ export function TransactionList({
                         <span className="truncate font-medium text-slate-100">{concept}</span>
                         <span className="sr-only">. Abrir detalle</span>
                       </button>
-                      {transaction.kind === "single" ? (
-                        <p className="mt-1 truncate text-xs text-slate-500">
-                          {transaction.category}
-                        </p>
-                      ) : null}
+                      <TransactionPreview transaction={transaction} />
                     </td>
                     <td>
                       <TypeBadge transaction={transaction} />

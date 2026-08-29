@@ -13,6 +13,7 @@ import { DataSourcePage } from "./pages/data-source-page";
 import { ExpensesPage } from "./pages/expenses-page";
 import { HomePage } from "./pages/home-page";
 import { LoginPage } from "./pages/login-page";
+import { MonthlyBalancePage } from "./pages/monthly-balance-page";
 import { TransactionsPage } from "./pages/transactions-page";
 
 function UnconfiguredPage({ errors }: { errors: string[] }) {
@@ -90,6 +91,7 @@ export function AppRoutes({ services }: { services: AppServices }) {
           path="movimientos/:transactionId/editar"
           element={<TransactionsPage services={services} />}
         />
+        <Route path="balance" element={<MonthlyBalancePage services={services} />} />
         <Route path="gastos" element={<ExpensesPage services={services} />} />
         <Route path="control/calidad" element={<DataQualityPage services={services} />} />
         <Route path="control/fuente" element={<DataSourcePage services={services} />} />

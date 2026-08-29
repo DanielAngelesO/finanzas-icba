@@ -6,6 +6,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { DataSourceQueries } from "../../application/use-cases/data-source-queries";
 import { GetDashboardOverviewUseCase } from "../../application/use-cases/get-dashboard-overview";
 import { GetExpenseAnalysisUseCase } from "../../application/use-cases/get-expense-analysis";
+import { GetMonthlyBalanceUseCase } from "../../application/use-cases/get-monthly-balance";
 import { GetBasicFinancialSummaryUseCase } from "../../application/use-cases/get-basic-financial-summary";
 import { TransactionQueries } from "../../application/use-cases/transaction-queries";
 import { AccessTokenStore, type AppServices } from "../../composition/services";
@@ -40,6 +41,7 @@ const createServices = (transactions: Transaction[]): AppServices => {
     financialSummary: new GetBasicFinancialSummaryUseCase(repository),
     dashboard: new GetDashboardOverviewUseCase(repository),
     expenses: new GetExpenseAnalysisUseCase(repository),
+    monthlyBalance: new GetMonthlyBalanceUseCase(repository),
   };
 };
 

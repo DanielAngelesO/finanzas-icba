@@ -24,6 +24,18 @@ function ReceiptIcon() {
   );
 }
 
+function ScaleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M10 1.5a.75.75 0 0 1 .75.75v.56c1.19.2 2.22.78 2.87 1.6l3.2.8a.75.75 0 0 1-.36 1.45l-2.02-.5 1.9 4.02a.75.75 0 0 1-.18.87c-.6.52-1.4.85-2.28.85s-1.68-.33-2.28-.85a.75.75 0 0 1-.18-.87l1.98-4.2a3.4 3.4 0 0 0-1.62-.86v9.73h3.25a.75.75 0 0 1 0 1.5H5.5a.75.75 0 0 1 0-1.5h3.25V6.24c-.6.13-1.15.43-1.62.86l1.98 4.2a.75.75 0 0 1-.18.87c-.6.52-1.4.85-2.28.85s-1.68-.33-2.28-.85a.75.75 0 0 1-.18-.87l1.9-4.02-2.02.5a.75.75 0 1 1-.36-1.45l3.2-.8a4.02 4.02 0 0 1 2.87-1.6v-.56A.75.75 0 0 1 10 1.5ZM4.87 11.06h2.76L6.25 8.14l-1.38 2.92Zm8.5 0h2.76l-1.38-2.92-1.38 2.92Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
 function OverviewIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -183,6 +195,10 @@ export function AppShell() {
         <NavLink className="sidebar-link" to="/movimientos" onClick={closeSidebar}>
           <ReceiptIcon />
           Movimientos
+        </NavLink>
+        <NavLink className="sidebar-link" to="/balance" onClick={closeSidebar}>
+          <ScaleIcon />
+          Balance mensual
         </NavLink>
 
         <p className="sidebar-section-label">Análisis</p>
