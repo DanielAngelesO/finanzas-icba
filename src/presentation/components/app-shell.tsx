@@ -294,7 +294,7 @@ export function AppShell() {
       </aside>
 
       <main className="min-h-screen pt-14 lg:ml-64 lg:pt-0">
-        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="app-content mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
           {isReviewMode ? (
             <div
               className="review-mode-banner mb-6"

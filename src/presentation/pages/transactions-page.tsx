@@ -208,7 +208,7 @@ export function TransactionsPage({ services }: { services: AppServices }) {
   const newType = searchParams.get("newType");
   const initialEditorType: TransactionType = isTransactionType(newType)
     ? newType
-    : (duplicatedTransaction?.type ?? similarTransaction?.type ?? "EGRESO");
+    : (duplicatedTransaction?.type ?? similarTransaction?.type ?? "INGRESO");
   const listParams = new URLSearchParams(searchParams);
   listParams.delete("duplicate");
   listParams.delete("newType");

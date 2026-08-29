@@ -1,5 +1,5 @@
 import { getTransactionStatusLabel, type LogicalTransaction } from "../../../domain/transaction";
-import { formatCompactDate, formatMoney } from "../../formatters";
+import { formatCompactDate, formatMoney, formatTableDate } from "../../formatters";
 import {
   getAmountClass,
   getAmountPrefix,
@@ -34,38 +34,83 @@ const groupByDay = (
   return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
 };
 
-function TypeBadge({ transaction }: { transaction: LogicalTransaction }) {
+/** Solo el glifo del tipo: el nombre queda en `title` y para lectores de pantalla. */
+function TypeGlyph({ transaction }: { transaction: LogicalTransaction }) {
+  const label = getTransactionTypeLabel(transaction.type);
   return (
-    <span className={getTransactionTypeClass(transaction.type)}>
+    <span
+      className={`transaction-type-glyph ${getTransactionTypeClass(transaction.type)}`}
+      title={label}
+    >
       <span aria-hidden="true">{getTransactionTypeIcon(transaction.type)}</span>
-      {getTransactionTypeLabel(transaction.type)}
+      <span className="sr-only">{label}</span>
     </span>
   );
 }
 
-function TransactionPreview({ transaction }: { transaction: LogicalTransaction }) {
-  const { category, donor, offeringDate } = getTransactionPreviewParts(transaction);
-  if (!category && !donor && !offeringDate) return null;
-  const preview = [category, donor].filter(Boolean).join(" · ");
+/**
+ * Celda densa de una o dos líneas: el dato principal arriba y el complementario
+ * debajo, ambos truncados con el valor completo en `title`.
+ */
+function Cell({
+  value,
+  detail,
+  className,
+  emphasis,
+}: {
+  value: string | null;
+  detail?: string | null;
+  className?: string;
+  emphasis?: boolean;
+}) {
+  const classes = ["transaction-table-cell", className].filter(Boolean).join(" ");
   return (
-    <div className="transaction-preview">
-      {preview ? (
-        <p className="transaction-preview-line" title={preview}>
-          {category ? <span className="transaction-preview-category">{category}</span> : null}
-          {category && donor ? (
-            <span className="transaction-preview-separator">{" · "}</span>
-          ) : null}
-          {donor ? <span className="transaction-preview-donor">{donor}</span> : null}
-        </p>
+    <td className={classes}>
+      {value ? (
+        <span
+          className={`transaction-cell-value${emphasis ? " transaction-table-cell-strong" : ""}`}
+          title={value}
+        >
+          {value}
+        </span>
+      ) : (
+        <span className="transaction-cell-value transaction-table-empty" aria-hidden="true">
+          —
+        </span>
+      )}
+      {detail ? (
+        <span className="transaction-cell-detail" title={detail}>
+          {detail}
+        </span>
       ) : null}
-      {offeringDate ? (
-        <p className="transaction-preview-date" title={offeringDate}>
-          {offeringDate}
-        </p>
-      ) : null}
-    </div>
+    </td>
   );
 }
+
+interface TransactionRowFields {
+  category: string | null;
+  subcategory: string | null;
+  party: string | null;
+  paymentMethod: string | null;
+  receipt: string | null;
+}
+
+const getRowFields = (transaction: LogicalTransaction): TransactionRowFields =>
+  transaction.kind === "single"
+    ? {
+        category: transaction.category,
+        subcategory: transaction.subcategory,
+        party: transaction.donorOrProvider,
+        paymentMethod: transaction.paymentMethod,
+        receipt: transaction.referenceOrReceipt,
+      }
+    : {
+        category: null,
+        subcategory: null,
+        party: null,
+        paymentMethod: null,
+        receipt: null,
+      };
 
 function Amount({ transaction }: { transaction: LogicalTransaction }) {
   return (
@@ -190,19 +235,27 @@ export function TransactionList({
           <table className="data-table transaction-table" aria-label="Movimientos encontrados">
             <thead>
               <tr>
-                <th scope="col">Fecha</th>
-                <th scope="col">Movimiento</th>
-                <th scope="col">Tipo</th>
-                <th scope="col">Cuenta</th>
-                <th scope="col">Estado</th>
-                <th scope="col" className="text-right">
+                <th className="transaction-col-date" scope="col">
+                  Fecha
+                </th>
+                <th className="transaction-col-type" scope="col">
+                  <span className="sr-only">Tipo</span>
+                </th>
+                <th scope="col">Categoría / Subcategoría</th>
+                <th scope="col">Donante / Proveedor</th>
+                <th scope="col">Cuenta / Pago</th>
+                <th className="transaction-col-amount text-right" scope="col">
                   Monto
+                </th>
+                <th className="transaction-col-concept" scope="col">
+                  Descripción / Comprobante
                 </th>
               </tr>
             </thead>
             <tbody>
               {transactions.map((transaction) => {
-                const concept = getTransactionConcept(transaction);
+                const fields = getRowFields(transaction);
+                const accounts = getTransactionAccountsLabel(transaction);
                 return (
                   <tr
                     className={
@@ -210,38 +263,50 @@ export function TransactionList({
                     }
                     key={transaction.transactionId}
                   >
-                    <td className="whitespace-nowrap text-slate-300">
-                      {formatCompactDate(transaction.date)}
+                    <td className="transaction-table-cell transaction-col-date">
+                      {formatTableDate(transaction.date)}
                     </td>
-                    <td className="transaction-table-concept">
-                      <button
-                        className="transaction-table-row-action"
-                        type="button"
-                        onClick={(event) => onOpen(transaction, event.currentTarget)}
-                      >
-                        <span className="truncate font-medium text-slate-100">{concept}</span>
-                        <span className="sr-only">. Abrir detalle</span>
-                      </button>
-                      <TransactionPreview transaction={transaction} />
+                    <td className="transaction-col-type">
+                      <TypeGlyph transaction={transaction} />
                     </td>
-                    <td>
-                      <TypeBadge transaction={transaction} />
-                    </td>
-                    <td
-                      className="max-w-52 truncate text-slate-300"
-                      title={getTransactionAccountsLabel(transaction)}
-                    >
-                      {getTransactionAccountsLabel(transaction)}
-                    </td>
-                    <td>
-                      <span
-                        className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}`}
-                      >
-                        {getTransactionStatusLabel(transaction.status)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap text-right">
+                    <Cell value={fields.category} detail={fields.subcategory} emphasis />
+                    <Cell value={fields.party} />
+                    <Cell value={accounts} detail={fields.paymentMethod} emphasis />
+                    <td className="transaction-col-amount text-right">
                       <Amount transaction={transaction} />
+                      {transaction.status === "CONFIRMED" ? null : (
+                        <span
+                          className={`transaction-status-label transaction-status-${transaction.status.toLocaleLowerCase()}`}
+                        >
+                          {getTransactionStatusLabel(transaction.status)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="transaction-table-cell transaction-col-concept">
+                      <span className="transaction-concept-cell">
+                        <button
+                          className="transaction-table-row-action"
+                          type="button"
+                          title={transaction.description ?? undefined}
+                          onClick={(event) => onOpen(transaction, event.currentTarget)}
+                        >
+                          <span className="truncate">
+                            {transaction.description ?? "Sin descripción"}
+                          </span>
+                          <span className="sr-only">. Abrir detalle</span>
+                        </button>
+                        {transaction.notes ? (
+                          <span className="transaction-note-flag" title={transaction.notes}>
+                            <span aria-hidden="true">✎</span>
+                            <span className="sr-only">Tiene notas: {transaction.notes}</span>
+                          </span>
+                        ) : null}
+                      </span>
+                      {fields.receipt ? (
+                        <span className="transaction-cell-detail" title={fields.receipt}>
+                          {fields.receipt}
+                        </span>
+                      ) : null}
                     </td>
                   </tr>
                 );

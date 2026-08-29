@@ -1283,7 +1283,8 @@ describe("explorador de movimientos", () => {
     await waitFor(() => expect(newButton).toBeEnabled());
     await user.click(newButton);
 
-    const editor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+    const editor = await screen.findByRole("dialog", { name: "Nuevo ingreso" });
+    await user.click(within(editor).getByLabelText("Egreso"));
     const amount = within(editor).getByLabelText(/Monto/);
     await user.click(within(editor).getByRole("button", { name: "Guardar egreso" }));
     expect(within(editor).getByRole("alert")).toHaveTextContent(
@@ -1312,7 +1313,7 @@ describe("explorador de movimientos", () => {
     renderApp("/movimientos?period=202608", createServices(explorerTransactions));
 
     await user.click(await screen.findByRole("button", { name: "Registrar nuevo movimiento" }));
-    const editor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+    const editor = await screen.findByRole("dialog", { name: "Nuevo ingreso" });
 
     await user.click(within(editor).getByLabelText("Transferencia"));
     expect(within(editor).getByLabelText("Desde")).toBeInTheDocument();
@@ -1330,14 +1331,14 @@ describe("explorador de movimientos", () => {
     renderApp("/movimientos?period=202608", createServices(explorerTransactions));
 
     await user.click(await screen.findByRole("button", { name: "Registrar nuevo movimiento" }));
-    const editor = await screen.findByRole("dialog", { name: "Nuevo egreso" });
+    const editor = await screen.findByRole("dialog", { name: "Nuevo ingreso" });
     const amount = within(editor).getByLabelText(/Monto/);
 
     fireEvent.blur(amount);
-    await user.click(within(editor).getByLabelText("Ingreso"));
+    await user.click(within(editor).getByLabelText("Egreso"));
     expect(within(editor).queryByText("Revisa los campos indicados antes de guardar.")).toBeNull();
 
-    await user.click(within(editor).getByRole("button", { name: "Guardar ingreso" }));
+    await user.click(within(editor).getByRole("button", { name: "Guardar egreso" }));
     expect(within(editor).getByRole("alert")).toHaveTextContent(
       "Revisa los campos indicados antes de guardar.",
     );

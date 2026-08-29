@@ -17,7 +17,7 @@ const single = (overrides: Partial<Transaction>): LogicalTransaction => {
 const renderList = (transactions: LogicalTransaction[]) =>
   render(<TransactionList transactions={transactions} onOpen={() => {}} />);
 
-describe("TransactionList — columna Movimiento", () => {
+describe("TransactionList — tabla de escritorio", () => {
   it("muestra el donante en el preview de un diezmo", () => {
     renderList([
       single({
@@ -34,19 +34,64 @@ describe("TransactionList — columna Movimiento", () => {
     expect(within(table).getByText("Diezmos")).toBeInTheDocument();
   });
 
-  it("muestra la fecha de preview en una ofrenda", () => {
-    const transaction = single({
-      transactionId: "TX-OFRENDA",
-      type: "INGRESO",
-      category: "Ofrendas",
-      description: "Ofrenda dominical",
-    });
-    renderList([transaction]);
+  it("expone en columnas cada campo que el usuario registró", () => {
+    renderList([
+      single({
+        transactionId: "TX-COMPLETA",
+        type: "EGRESO",
+        account: "Cuenta Interbank",
+        category: "Servicios",
+        subcategory: "Luz",
+        description: "Recibo de agosto",
+        donorOrProvider: "Enel",
+        paymentMethod: "Transferencia",
+        referenceOrReceipt: "F001-123",
+        notes: "Pagado con cargo automático",
+      }),
+    ]);
 
     const table = screen.getByRole("table", { name: "Movimientos encontrados" });
-    expect(
-      within(table).getByText(formatPreviewDate(transaction.date)),
-    ).toBeInTheDocument();
+    const headers = within(table)
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent);
+    expect(headers).toEqual([
+      "Fecha",
+      "Tipo",
+      "Categoría / Subcategoría",
+      "Donante / Proveedor",
+      "Cuenta / Pago",
+      "Monto",
+      "Descripción / Comprobante",
+    ]);
+
+    const row = within(table).getAllByRole("row")[1];
+    if (!row) throw new Error("La tabla no renderizó la fila de la transacción.");
+    ["Servicios", "Luz", "Enel", "Cuenta Interbank", "Transferencia", "F001-123"].forEach(
+      (value) => {
+        expect(within(row).getByText(value)).toBeInTheDocument();
+      },
+    );
+    expect(within(row).getByRole("button", { name: /Recibo de agosto/ })).toBeInTheDocument();
+    expect(within(row).getByText(/Tiene notas: Pagado con cargo automático/)).toBeInTheDocument();
+  });
+
+  it("marca con guion los campos que no aplican a una transferencia", () => {
+    renderList([
+      single({
+        transactionId: "TX-SIN-DATOS",
+        type: "EGRESO",
+        category: "Servicios",
+        description: null,
+        subcategory: null,
+        referenceOrReceipt: null,
+      }),
+    ]);
+
+    const table = screen.getByRole("table", { name: "Movimientos encontrados" });
+    const row = within(table).getAllByRole("row")[1];
+    if (!row) throw new Error("La tabla no renderizó la fila de la transacción.");
+    expect(within(row).getByRole("button", { name: /Sin descripción/ })).toBeInTheDocument();
+    expect(within(row).getAllByText("—")).toHaveLength(1);
   });
 
   it("muestra la fecha de preview de la ofrenda en la fila móvil, con la cuenta al final", () => {

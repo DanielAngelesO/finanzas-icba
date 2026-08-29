@@ -18,6 +18,12 @@ const compactDateFormatter = new Intl.DateTimeFormat("es-PE", {
   year: "numeric",
 });
 
+const tableDateFormatter = new Intl.DateTimeFormat("es-PE", {
+  day: "2-digit",
+  month: "short",
+  year: "2-digit",
+});
+
 const previewWeekdayFormatter = new Intl.DateTimeFormat("es-PE", {
   weekday: "long",
   timeZone: "America/Lima",
@@ -78,6 +84,9 @@ export const formatShortPeriod = (period: string): string => {
 };
 
 export const formatCompactDate = (date: Date): string => compactDateFormatter.format(date);
+
+/** Fecha de tabla con año de dos dígitos: "31 mar. 26". */
+export const formatTableDate = (date: Date): string => tableDateFormatter.format(date);
 
 /** Fecha corta de libro contable: "23/08". */
 export const formatLedgerDate = (date: Date): string => ledgerDateFormatter.format(date);
